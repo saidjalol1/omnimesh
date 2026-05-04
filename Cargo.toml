@@ -1,0 +1,8 @@
+[package]
+name = "omnimesh"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+quinn = "0.10"

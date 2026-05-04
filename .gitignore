@@ -1,0 +1,6 @@
+*.docx
+*.md
+
+# Added by cargo
+
+/target
