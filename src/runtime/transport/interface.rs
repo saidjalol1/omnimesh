@@ -1,6 +1,6 @@
 use crate::envelope::SignedEnvelope;
 
-pub const DEFAULT_PAYLOAD_CAPACITY: usize = 128;
+pub const DEFAULT_PAYLOAD_CAPACITY: usize = 1024;
 
 /// Core transport trait for OMNI-MESH message transport.
 ///
@@ -9,8 +9,8 @@ pub const DEFAULT_PAYLOAD_CAPACITY: usize = 128;
 /// over various network protocols (TCP, QUIC, etc.).
 ///
 /// # Thread Safety
-/// Implementations should be thread-safe and handle concurrent access appropriately.
-/// The trait methods may be called from multiple threads.
+/// All implementations must be `Send + Sync` to support multi-threaded usage.
+/// Implementations should handle concurrent access appropriately.
 ///
 /// # Error Handling
 /// All methods return `Result` types to handle network failures gracefully.
@@ -19,7 +19,7 @@ pub const DEFAULT_PAYLOAD_CAPACITY: usize = 128;
 /// # Performance
 /// The `receive()` method should be non-blocking and return immediately if no
 /// envelope is available. The `send()` method may block for network I/O.
-pub trait Transport: std::fmt::Debug {
+pub trait Transport: std::fmt::Debug + Send + Sync {
     /// Attempts to receive a signed envelope from the transport.
     ///
     /// This method should be non-blocking and return `None` if no envelope
@@ -52,4 +52,14 @@ pub trait Transport: std::fmt::Debug {
     /// # Returns
     /// A static string describing the transport (e.g., "tcp transport", "quic transport")
     fn kind(&self) -> &'static str;
+
+    /// Maximum transmission unit for this transport.
+    fn mtu(&self) -> usize {
+        65536 // default: 64KB
+    }
+
+    /// Worst-case execution time for send in microseconds.
+    fn wcet_send_us(&self) -> u64 {
+        1000 // default: 1ms
+    }
 }

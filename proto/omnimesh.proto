@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package omnimesh;
+
+// Agent-to-agent command messages
+message AgentCommand {
+    string command_type = 1;
+    bytes  target_did   = 2;
+    uint64 timestamp_ns = 3;
+    bytes  payload      = 4;
+}
+
+// Robot motion commands
+message MotionCommand {
+    float linear_x  = 1;
+    float linear_y  = 2;
+    float linear_z  = 3;
+    float angular_x = 4;
+    float angular_y = 5;
+    float angular_z = 6;
+    uint64 deadline_ns = 7;
+}
+
+// Inference result from an ML pipeline
+message InferenceResult {
+    string model_id   = 1;
+    float  confidence  = 2;
+    string label       = 3;
+    bytes  raw_output  = 4;
+    uint64 latency_us  = 5;
+}
+
+// Telemetry heartbeat
+message Heartbeat {
+    bytes  sender_did  = 1;
+    uint64 uptime_ms   = 2;
+    uint32 cpu_usage    = 3;
+    uint32 mem_usage_kb = 4;
+    uint64 epoch        = 5;
+}
+
+// Generic envelope payload wrapper
+message EnvelopePayload {
+    oneof payload {
+        AgentCommand    agent_command    = 1;
+        MotionCommand   motion_command   = 2;
+        InferenceResult inference_result = 3;
+        Heartbeat       heartbeat        = 4;
+    }
+}

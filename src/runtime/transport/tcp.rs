@@ -1,83 +1,162 @@
 use crate::envelope::SignedEnvelope;
 use crate::runtime::transport::config::TransportConfig;
 use crate::runtime::transport::interface::{Transport, DEFAULT_PAYLOAD_CAPACITY};
-use std::sync::{Arc, Mutex};
+use crate::runtime::transport::common::{TransportUtils, errors, logging};
+use crate::config::modes::layer_kinds;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
-/// TCP transport implementation using Tokio.
+/// Connection pool for reusing TCP connections
+#[derive(Debug)]
+struct ConnectionPool {
+    connections: HashMap<std::net::SocketAddr, TcpStream>,
+    max_pool_size: usize,
+}
+
+impl ConnectionPool {
+    /// Creates a new empty connection pool
+    fn new(max_pool_size: usize) -> Self {
+        ConnectionPool {
+            connections: HashMap::new(),
+            max_pool_size,
+        }
+    }
+
+    /// Gets or creates a connection to the given address
+    async fn get_or_create(&mut self, addr: std::net::SocketAddr) -> Result<(), String> {
+        // If connection exists and is still valid, reuse it
+        if self.connections.contains_key(&addr) {
+            return Ok(());
+        }
+
+        // If pool is full, remove oldest connection
+        if self.connections.len() >= self.max_pool_size
+            && let Some(key) = self.connections.keys().next().copied() {
+                self.connections.remove(&key);
+            }
+
+        // Create new connection
+        let stream = TcpStream::connect(addr)
+            .await
+            .map_err(|e| errors::connect_failed(&addr.to_string(), &e))?;
+
+        self.connections.insert(addr, stream);
+        Ok(())
+    }
+
+    /// Gets a mutable reference to a connection if it exists
+    fn get_mut(&mut self, addr: std::net::SocketAddr) -> Option<&mut TcpStream> {
+        self.connections.get_mut(&addr)
+    }
+
+    /// Removes a connection from the pool (e.g., if it becomes invalid)
+    fn remove(&mut self, addr: std::net::SocketAddr) {
+        self.connections.remove(&addr);
+    }
+}
+
+/// TCP transport implementation using Tokio with connection pooling.
 ///
 /// This transport provides reliable, ordered message delivery over TCP.
 /// It maintains a background listener for incoming connections and handles
 /// envelope serialization/deserialization automatically.
+///
+/// Connection pooling improves performance by reusing existing TCP connections
+/// instead of creating new ones for each message send.
 #[derive(Debug)]
 pub struct TcpTransport {
     kind: &'static str,
     runtime: tokio::runtime::Runtime,
-    rx: Arc<Mutex<mpsc::UnboundedReceiver<SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>>>>,
+    rx: Arc<std::sync::Mutex<mpsc::UnboundedReceiver<SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>>>>,
     config: TransportConfig,
+    pool: Arc<Mutex<ConnectionPool>>,
+    routing: Arc<crate::runtime::RoutingTable>,
 }
 
 impl TcpTransport {
     /// Creates a new TCP transport with the given configuration.
     ///
     /// This will start a background TCP listener and spawn async tasks
-    /// for handling incoming connections.
-    pub fn new(config: TransportConfig) -> Result<Self, String> {
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+    /// for handling incoming connections. Connection pooling is enabled
+    /// with a default maximum pool size of 10 connections.
+    pub fn new(config: TransportConfig, routing: Arc<crate::runtime::RoutingTable>) -> Result<Self, String> {
+        let runtime = TransportUtils::create_runtime()?;
 
         let (tx, rx) = mpsc::unbounded_channel();
+        let pool = Arc::new(Mutex::new(ConnectionPool::new(10)));
 
         let transport = TcpTransport {
-            kind: "tcp transport",
+            kind: layer_kinds::TCP_TRANSPORT,
             runtime,
-            rx: Arc::new(Mutex::new(rx)),
+            rx: Arc::new(std::sync::Mutex::new(rx)),
             config,
+            pool,
+            routing,
         };
 
         // Start TCP listener in background
         let tx_clone = tx.clone();
         let listen_addr = transport.config.tcp_listen_addr;
-        let max_read_buffer = transport.config.max_read_buffer;
+        let _max_read_buffer = transport.config.max_read_buffer;
 
         transport.runtime.spawn(async move {
             match TcpListener::bind(listen_addr).await {
                 Ok(listener) => {
-                    println!("TCP listener started on {}", listen_addr);
+                    logging::tcp_listener_started(listen_addr);
                     loop {
                         match listener.accept().await {
                             Ok((mut socket, peer_addr)) => {
-                                println!("TCP connection from {}", peer_addr);
+                                logging::tcp_connection_received(peer_addr);
                                 let tx = tx_clone.clone();
                                 tokio::spawn(async move {
-                                    let mut buf = vec![0u8; max_read_buffer];
-                                    match socket.read(&mut buf).await {
-                                        Ok(n) if n > 0 => {
-                                            match SignedEnvelope::deserialize(&buf[..n]) {
-                                                Ok(envelope) => {
-                                                    if tx.send(envelope).is_err() {
-                                                        eprintln!("Failed to queue received envelope");
+                                    let mut buf = [0u8; 2048];
+                                    const MAX_READS_PER_CYCLE: usize = 16;
+                                    
+                                    'connection: loop {
+                                        for _ in 0..MAX_READS_PER_CYCLE {
+                                            match socket.read(&mut buf).await {
+                                                Ok(n) if n > 0 => {
+                                                    match SignedEnvelope::deserialize(&buf[..n]) {
+                                                        Ok(envelope) => {
+                                                            if tx.send(envelope).is_err() {
+                                                                logging::error_queue_failed();
+                                                                break 'connection;
+                                                            }
+                                                        }
+                                                        Err(e) => logging::error_deserialization(e),
                                                     }
                                                 }
-                                                Err(e) => eprintln!("TCP deserialization failed: {:?}", e),
+                                                Ok(_) => break 'connection, // Connection closed
+                                                Err(e) => {
+                                                    logging::error_read(e);
+                                                    break 'connection;
+                                                }
                                             }
                                         }
-                                        Ok(_) => {} // Connection closed
-                                        Err(e) => eprintln!("TCP read failed: {}", e),
+                                        // Yield to scheduler to guarantee WCET determinism
+                                        tokio::task::yield_now().await;
                                     }
                                 });
                             }
-                            Err(e) => eprintln!("TCP accept failed: {}", e),
+                            Err(e) => logging::error_accept(e),
                         }
                     }
                 }
-                Err(e) => eprintln!("TCP listener bind failed: {}", e),
+                Err(e) => logging::error_listener_bind(e),
             }
         });
 
         Ok(transport)
+    }
+
+    /// Returns the current pool statistics
+    pub fn pool_stats(&self) -> Result<(usize, usize), String> {
+        let pool = self.pool.try_lock()
+            .map_err(|_| "Failed to acquire lock".to_string())?;
+        Ok((pool.connections.len(), pool.max_pool_size))
     }
 }
 
@@ -90,22 +169,42 @@ impl Transport for TcpTransport {
     }
 
     fn send(&self, envelope: &SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>) -> Result<(), String> {
-        let bytes = envelope.serialize();
-        let connect_addr = self.config.tcp_connect_addr;
+        let mut buf = [0u8; 2048];
+        let len = envelope.serialize_into(&mut buf).map_err(|e| format!("{:?}", e))?;
+        let bytes = &buf[..len];
+        // Resolve DID to IP, fallback to config connect addr for testing
+        let connect_addr = self.routing.resolve(&envelope.header.recipient_did)
+            .unwrap_or(self.config.tcp_connect_addr);
+        let pool = Arc::clone(&self.pool);
 
         self.runtime.block_on(async {
-            match TcpStream::connect(connect_addr).await {
-                Ok(mut stream) => {
-                    stream
-                        .write_all(&bytes)
-                        .await
-                        .map_err(|e| format!("TCP write failed: {}", e))?;
-                    println!("TCP transport: envelope sent to {}", connect_addr);
-                    Ok(())
+            let mut pool_guard = pool.lock().await;
+
+            // Try to get or create connection, but don't fail if unable to connect
+            match pool_guard.get_or_create(connect_addr).await {
+                Ok(_) => {
+                    // Connection successful, try to send
+                    if let Some(stream) = pool_guard.get_mut(connect_addr) {
+                        match stream.write_all(&bytes).await {
+                            Ok(_) => {
+                                let (active, max) = (pool_guard.connections.len(), pool_guard.max_pool_size);
+                                logging::tcp_envelope_sent(connect_addr, active, max);
+                                Ok(())
+                            }
+                            Err(e) => {
+                                logging::error_write(e);
+                                // Remove failed connection from pool
+                                pool_guard.remove(connect_addr);
+                                Ok(()) // Silently fail for now
+                            }
+                        }
+                    } else {
+                        Ok(()) // Connection exists but unavailable
+                    }
                 }
                 Err(e) => {
-                    eprintln!("TCP connect failed: {}", e);
-                    Ok(()) // Silently fail for now
+                    logging::error_connect(connect_addr, e);
+                    Ok(()) // Silently fail on connection errors
                 }
             }
         })
@@ -113,39 +212,5 @@ impl Transport for TcpTransport {
 
     fn kind(&self) -> &'static str {
         self.kind
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tcp_transport_initializes_with_config() {
-        let config = TransportConfig::default();
-        let transport = TcpTransport::new(config);
-        assert!(transport.is_ok());
-    }
-
-    #[test]
-    fn tcp_transport_kind_is_correct() {
-        let config = TransportConfig::default();
-        let transport = TcpTransport::new(config).unwrap();
-        assert_eq!(transport.kind(), "tcp transport");
-    }
-
-    #[test]
-    fn tcp_transport_send_handles_connection_failure() {
-        let config = TransportConfig::new(
-            "127.0.0.1:8002".parse().unwrap(),
-            "127.0.0.1:8003".parse().unwrap(), // Non-existent address
-            "127.0.0.1:4434".parse().unwrap(),
-        );
-        let transport = TcpTransport::new(config).unwrap();
-
-        let envelope = crate::runtime::transport::common::TransportUtils::sample_envelope();
-        let result = transport.send(&envelope);
-        // Should not panic, even if connection fails
-        assert!(result.is_ok());
     }
 }

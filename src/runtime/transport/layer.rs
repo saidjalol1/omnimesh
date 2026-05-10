@@ -15,6 +15,8 @@ use crate::runtime::transport::interface::{Transport, DEFAULT_PAYLOAD_CAPACITY};
 pub struct TransportLayer {
     transport: Box<dyn Transport>,
     config: TransportConfig,
+    #[allow(dead_code)]
+    routing: std::sync::Arc<crate::runtime::RoutingTable>,
 }
 
 impl TransportLayer {
@@ -24,27 +26,39 @@ impl TransportLayer {
     /// Each transport is initialized with appropriate configuration.
     pub fn new(mode: &OmnimeshMode) -> Result<Self, String> {
         let config = TransportConfig::default();
+        let routing = std::sync::Arc::new(crate::runtime::RoutingTable::new());
 
         let transport: Box<dyn Transport> = match mode.transport_type() {
-            TransportType::Mock => Box::new(MockTransport::new()),
-            TransportType::Tcp => Box::new(TcpTransport::new(config.clone())?),
-            TransportType::Quic => Box::new(QuicTransport::new(config.clone())?),
+            TransportType::Mock => Box::new(MockTransport::new(routing.clone())),
+            TransportType::Tcp => Box::new(TcpTransport::new(config.clone(), routing.clone())?),
+            TransportType::Quic => Box::new(QuicTransport::new(config.clone(), routing.clone())?),
         };
 
-        Ok(TransportLayer { transport, config })
+        if !matches!(mode.transport_type(), TransportType::Mock) {
+            let gossip_addr = "0.0.0.0:8888".parse().unwrap();
+            routing.clone().start_gossip_task(1000, gossip_addr);
+        }
+
+        Ok(TransportLayer { transport, config, routing })
     }
 
     /// Creates a new transport layer with custom configuration.
     ///
     /// This allows overriding the default network configuration for specific deployments.
     pub fn with_config(mode: &OmnimeshMode, config: TransportConfig) -> Result<Self, String> {
+        let routing = std::sync::Arc::new(crate::runtime::RoutingTable::new());
         let transport: Box<dyn Transport> = match mode.transport_type() {
-            TransportType::Mock => Box::new(MockTransport::new()),
-            TransportType::Tcp => Box::new(TcpTransport::new(config.clone())?),
-            TransportType::Quic => Box::new(QuicTransport::new(config.clone())?),
+            TransportType::Mock => Box::new(MockTransport::new(routing.clone())),
+            TransportType::Tcp => Box::new(TcpTransport::new(config.clone(), routing.clone())?),
+            TransportType::Quic => Box::new(QuicTransport::new(config.clone(), routing.clone())?),
         };
 
-        Ok(TransportLayer { transport, config })
+        if !matches!(mode.transport_type(), TransportType::Mock) {
+            let gossip_addr = "0.0.0.0:8888".parse().unwrap();
+            routing.clone().start_gossip_task(1000, gossip_addr);
+        }
+
+        Ok(TransportLayer { transport, config, routing })
     }
 
     /// Initializes the transport layer.
@@ -77,43 +91,5 @@ impl TransportLayer {
     /// Returns the current transport configuration.
     pub fn config(&self) -> &TransportConfig {
         &self.config
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn transport_layer_development_uses_mock() {
-        let mode = OmnimeshMode::development();
-        let layer = TransportLayer::new(&mode).unwrap();
-        assert_eq!(layer.kind(), "mock transport");
-    }
-
-    #[test]
-    fn transport_layer_lightweight_uses_tcp() {
-        let mode = OmnimeshMode::lightweight();
-        let layer = TransportLayer::new(&mode).unwrap();
-        assert_eq!(layer.kind(), "tcp transport");
-    }
-
-    #[test]
-    fn transport_layer_production_uses_quic() {
-        let mode = OmnimeshMode::production();
-        let layer = TransportLayer::new(&mode).unwrap();
-        assert_eq!(layer.kind(), "quic transport");
-    }
-
-    #[test]
-    fn transport_layer_with_custom_config() {
-        let mode = OmnimeshMode::lightweight();
-        let config = TransportConfig::new(
-            "127.0.0.1:9001".parse().unwrap(),
-            "127.0.0.1:9001".parse().unwrap(),
-            "127.0.0.1:9443".parse().unwrap(),
-        );
-        let layer = TransportLayer::with_config(&mode, config).unwrap();
-        assert_eq!(layer.kind(), "tcp transport");
     }
 }

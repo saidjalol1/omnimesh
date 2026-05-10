@@ -1,7 +1,10 @@
 //! Tests for the transport layer facade.
 
+#![allow(unused_imports)]
+
 use crate::config::OmnimeshMode;
 use crate::runtime::transport::TransportLayer;
+use super::helpers::{assert_transport_kind, create_and_initialize_transport};
 
 #[test]
 fn transport_receive_returns_valid_envelope() {
@@ -16,17 +19,9 @@ fn transport_receive_returns_valid_envelope() {
 
 #[test]
 fn transport_layer_kind_matches_mode() {
-    let dev_transport = TransportLayer::new(&OmnimeshMode::development())
-        .expect("transport creation failed");
-    assert_eq!(dev_transport.kind(), "mock transport");
-
-    let lw_transport = TransportLayer::new(&OmnimeshMode::lightweight())
-        .expect("transport creation failed");
-    assert_eq!(lw_transport.kind(), "tcp transport");
-
-    let prod_transport = TransportLayer::new(&OmnimeshMode::production())
-        .expect("transport creation failed");
-    assert_eq!(prod_transport.kind(), "quic transport");
+    assert_transport_kind(&OmnimeshMode::development(), "mock transport");
+    assert_transport_kind(&OmnimeshMode::lightweight(), "tcp transport");
+    assert_transport_kind(&OmnimeshMode::production(), "quic transport");
 }
 
 #[test]
@@ -56,4 +51,33 @@ fn transport_initialize_succeeds() {
         .expect("transport creation failed");
     let result = transport.initialize();
     assert!(result.is_ok());
+}
+
+#[test]
+fn transport_layer_development_uses_mock() {
+    assert_transport_kind(&OmnimeshMode::development(), "mock transport");
+}
+
+#[test]
+fn transport_layer_lightweight_uses_tcp() {
+    assert_transport_kind(&OmnimeshMode::lightweight(), "tcp transport");
+}
+
+#[test]
+fn transport_layer_production_uses_quic() {
+    assert_transport_kind(&OmnimeshMode::production(), "quic transport");
+}
+
+#[test]
+fn transport_layer_with_custom_config() {
+    use crate::runtime::transport::TransportConfig;
+    
+    let mode = OmnimeshMode::lightweight();
+    let config = TransportConfig::new(
+        "127.0.0.1:9001".parse().unwrap(),
+        "127.0.0.1:9001".parse().unwrap(),
+        "127.0.0.1:9443".parse().unwrap(),
+    );
+    let layer = TransportLayer::with_config(&mode, config).unwrap();
+    assert_eq!(layer.kind(), "tcp transport");
 }

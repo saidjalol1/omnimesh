@@ -1,0 +1,23 @@
+[core]
+mode = "lightweight"
+
+[node]
+node_id = "node-1"
+listen_addresses = ["0.0.0.0:9000"]
+known_peers = ["127.0.0.1:9000"]
+
+[node.transport]
+tcp_listen_addr = "0.0.0.0:9000"
+tcp_connect_addr = "127.0.0.1:9000"
+quic_listen_addr = "0.0.0.0:9443"
+max_read_buffer = 1048576
+
+[mode.production]
+crypto = "required"
+wcet_enforcement = "log"
+dynamic_did_registry = false
+pool_size = 1000
+
+[routing]
+max_routes = 1024
+gossip_interval_ms = 1000

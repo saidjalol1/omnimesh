@@ -1,34 +1,29 @@
 //! Tests for mode-based transport selection.
 
+#![allow(unused_imports)]
+
 use crate::config::OmnimeshMode;
 use crate::runtime::transport::TransportLayer;
+use super::helpers::{assert_transport_kind, create_and_initialize_transport};
 
 #[test]
 fn transport_development_mode_uses_mock() {
-    let mode = OmnimeshMode::development();
-    let transport = TransportLayer::new(&mode).expect("transport creation failed");
-    assert_eq!(transport.kind(), "mock transport");
+    assert_transport_kind(&OmnimeshMode::development(), "mock transport");
 }
 
 #[test]
 fn transport_lightweight_mode_uses_tcp() {
-    let mode = OmnimeshMode::lightweight();
-    let transport = TransportLayer::new(&mode).expect("transport creation failed");
-    assert_eq!(transport.kind(), "tcp transport");
+    assert_transport_kind(&OmnimeshMode::lightweight(), "tcp transport");
 }
 
 #[test]
 fn transport_production_mode_uses_quic() {
-    let mode = OmnimeshMode::production();
-    let transport = TransportLayer::new(&mode).expect("transport creation failed");
-    assert_eq!(transport.kind(), "quic transport");
+    assert_transport_kind(&OmnimeshMode::production(), "quic transport");
 }
 
 #[test]
 fn transport_certified_mode_uses_quic() {
-    let mode = OmnimeshMode::certified();
-    let transport = TransportLayer::new(&mode).expect("transport creation failed");
-    assert_eq!(transport.kind(), "quic transport");
+    assert_transport_kind(&OmnimeshMode::certified(), "quic transport");
 }
 
 #[test]
@@ -49,16 +44,12 @@ fn mock_transport_sends_envelope() {
 
 #[test]
 fn tcp_transport_initializes_successfully() {
-    let mode = OmnimeshMode::lightweight();
-    let transport = TransportLayer::new(&mode).expect("transport creation failed");
-    assert_eq!(transport.kind(), "tcp transport");
+    assert_transport_kind(&OmnimeshMode::lightweight(), "tcp transport");
 }
 
 #[test]
 fn quic_transport_initializes_successfully() {
-    let mode = OmnimeshMode::production();
-    let transport = TransportLayer::new(&mode).expect("transport creation failed");
-    assert_eq!(transport.kind(), "quic transport");
+    assert_transport_kind(&OmnimeshMode::production(), "quic transport");
 }
 
 #[test]
@@ -71,8 +62,7 @@ fn all_modes_initialize_successfully() {
     ];
 
     for mode in modes {
-        let transport = TransportLayer::new(&mode)
-            .expect(&format!("transport creation failed for {:?}", mode));
-        transport.initialize().expect("transport initialization failed");
+        let _transport = create_and_initialize_transport(&mode)
+            .expect(&format!("transport initialization failed for {:?}", mode));
     }
 }

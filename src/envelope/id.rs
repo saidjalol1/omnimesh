@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Did(pub [u8; 32]);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

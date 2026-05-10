@@ -9,6 +9,12 @@ pub enum PayloadError {
     Overflow,
 }
 
+impl<const N: usize> Default for PayloadStorage<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const N: usize> PayloadStorage<N> {
     pub const fn new() -> Self {
         Self {

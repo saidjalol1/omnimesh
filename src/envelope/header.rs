@@ -1,7 +1,7 @@
 use super::wire::{ParseError, RawEnvelopeHeader};
 use super::id::{Did, MessageId};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct EnvelopeHeader {
     pub version: u32,
     pub message_id: MessageId,
@@ -74,7 +74,7 @@ impl EnvelopeHeader {
         let mut bytes = [0u8; RawEnvelopeHeader::SIZE];
 
         unsafe {
-            std::ptr::copy_nonoverlapping(
+            core::ptr::copy_nonoverlapping(
                 &raw as *const RawEnvelopeHeader as *const u8,
                 bytes.as_mut_ptr(),
                 RawEnvelopeHeader::SIZE,

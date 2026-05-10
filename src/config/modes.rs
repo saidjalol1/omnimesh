@@ -24,6 +24,48 @@ pub enum TransportType {
     Quic,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DidRegistryMode {
+    Direct { max_entries: usize },
+    Hierarchical { local_cache_size: usize, enable_discovery: bool },
+    OffChain { resolver_url: alloc::string::String, cache_ttl_seconds: u64 },
+}
+
+#[derive(Debug, Clone)]
+pub struct OmniMeshConfig {
+    pub node_id: crate::envelope::Did,
+    pub listen_addresses: alloc::vec::Vec<std::net::SocketAddr>,
+    pub known_peers: alloc::vec::Vec<crate::envelope::Did>,
+    pub mode: OmnimeshMode,
+    pub dtn_path: Option<alloc::string::String>,
+}
+
+/// Layer kind names for consistent identification across the runtime
+pub mod layer_kinds {
+    // Transport layer kinds
+    pub const MOCK_TRANSPORT: &str = "mock transport";
+    pub const TCP_TRANSPORT: &str = "tcp transport";
+    pub const QUIC_TRANSPORT: &str = "quic transport";
+    
+    // Security layer kinds
+    pub const OPTIONAL_SECURITY: &str = "optional security";
+    pub const MINIMAL_SECURITY: &str = "minimal security";
+    pub const STANDARD_SECURITY: &str = "standard security";
+    pub const CERTIFIED_SECURITY: &str = "certified security";
+    
+    // Storage layer kinds
+    pub const DEVELOPMENT_STORAGE: &str = "development storage";
+    pub const EPHEMERAL_STORAGE: &str = "ephemeral storage";
+    pub const PERSISTENT_STORAGE: &str = "persistent storage";
+    pub const CERTIFIED_STORAGE: &str = "certified storage";
+    
+    // Delivery layer kinds
+    pub const BEST_EFFORT_DELIVERY: &str = "best-effort delivery";
+    pub const LIGHTWEIGHT_DELIVERY: &str = "lightweight delivery";
+    pub const RELIABLE_DELIVERY: &str = "reliable delivery";
+    pub const CERTIFIED_DELIVERY: &str = "certified delivery";
+}
+
 #[derive(Debug, Clone)]
 pub struct DevelopmentConfig {
     pub strict_wcet_enforcement: bool,
@@ -50,7 +92,7 @@ pub struct ProductionConfig {
     pub exactly_once_enabled: bool,
     pub ordering_enabled: bool,
     pub dtn_enabled: bool,
-    pub dtn_path: Option<std::path::PathBuf>,
+    pub dtn_path: Option<alloc::string::String>,
 }
 
 #[derive(Debug, Clone)]

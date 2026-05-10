@@ -21,9 +21,9 @@ pub struct TransportConfig {
 impl Default for TransportConfig {
     fn default() -> Self {
         Self {
-            tcp_listen_addr: "127.0.0.1:8001".parse().unwrap(),
-            tcp_connect_addr: "127.0.0.1:8001".parse().unwrap(),
-            quic_listen_addr: "127.0.0.1:4433".parse().unwrap(),
+            tcp_listen_addr: "127.0.0.1:9000".parse().unwrap(),
+            tcp_connect_addr: "127.0.0.1:9000".parse().unwrap(),
+            quic_listen_addr: "127.0.0.1:9443".parse().unwrap(),
             max_read_buffer: 512,
             connection_timeout_secs: 30,
         }

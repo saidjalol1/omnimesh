@@ -3,6 +3,8 @@ use crate::runtime::delivery::DeliveryLayer;
 use crate::runtime::security::SecurityLayer;
 use crate::runtime::storage::StorageLayer;
 use crate::runtime::transport::TransportLayer;
+use crate::runtime::RuntimeLayer;
+use crate::runtime::RuntimeStats;
 
 #[derive(Debug)]
 pub struct Runtime {
@@ -10,12 +12,13 @@ pub struct Runtime {
     security: SecurityLayer,
     storage: StorageLayer,
     delivery: DeliveryLayer,
+    stats: RuntimeStats,
 }
 
 impl Runtime {
     pub fn initialize(mode: OmnimeshMode) -> Result<Self, String> {
         let transport = TransportLayer::new(&mode)?;
-        let security = SecurityLayer::new(&mode);
+        let security = SecurityLayer::new(&mode, None);
         let storage = StorageLayer::new(&mode);
         let delivery = DeliveryLayer::new(&mode);
 
@@ -29,6 +32,7 @@ impl Runtime {
             security,
             storage,
             delivery,
+            stats: RuntimeStats::new(),
         })
     }
 
@@ -38,27 +42,66 @@ impl Runtime {
         Ok(())
     }
 
+    /// Start the runtime daemon loop.
+    ///
+    /// In daemon mode, this continuously polls the transport for incoming
+    /// envelopes, verifies them, stores them, and delivers them to the
+    /// application layer. It runs indefinitely until the process is killed.
     fn start(&mut self) -> Result<(), String> {
-        println!("OMNI-MESH runtime started with layers:");
-        println!("  - transport: {}", self.transport.kind());
-        println!("  - security: {}", self.security.kind());
-        println!("  - storage: {}", self.storage.kind());
-        println!("  - delivery: {}", self.delivery.kind());
+        println!("╔══════════════════════════════════════════════╗");
+        println!("║        OMNI-MESH V7 Runtime Daemon          ║");
+        println!("╠══════════════════════════════════════════════╣");
+        println!("║  Transport : {:<31} ║", self.transport.kind());
+        println!("║  Security  : {:<31} ║", self.security.kind());
+        println!("║  Storage   : {:<31} ║", self.storage.kind());
+        println!("║  Delivery  : {:<31} ║", self.delivery.kind());
+        println!("╚══════════════════════════════════════════════╝");
+        println!();
+        println!("Daemon loop started. Polling for envelopes...");
 
-        if let Some(envelope) = self.transport.receive() {
-            self.security.verify(&envelope)?;
-            self.storage.store(envelope)?;
-            let stored_envelope = self.storage.stored_count();
-            println!("Storage contains {} envelope(s)", stored_envelope);
-            if let Some(last_envelope) = self.storage.last_stored() {
-                self.delivery.deliver(last_envelope)?;
+        loop {
+            match self.transport.receive() {
+                Some(envelope) => {
+                    self.stats.record_received();
+
+                    // Pipeline: Verify → Store → Deliver
+                    match self.security.verify(&envelope) {
+                        Ok(_) => {
+                            if let Err(e) = self.storage.store(envelope.clone()) {
+                                eprintln!("  [STORE ERR] {}", e);
+                                continue;
+                            }
+
+                            if let Some(last) = self.storage.last_stored() {
+                                if let Err(e) = self.delivery.deliver(last) {
+                                    eprintln!("  [DELIVER ERR] {}", e);
+                                } else {
+                                    self.stats.record_delivered();
+                                    let snap = self.stats.snapshot();
+                                    println!(
+                                        "  [OK] Envelope delivered | recv={} delivered={}",
+                                        snap.total_messages_received,
+                                        snap.total_messages_delivered,
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            self.stats.record_signature_fail();
+                            eprintln!("  [REJECT] {}", e);
+                        }
+                    }
+                }
+                None => {
+                    // No envelope available right now. Yield the thread briefly.
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
             }
         }
-
-        Ok(())
     }
 }
 
 pub fn run(mode: OmnimeshMode) -> Result<(), String> {
     Runtime::run(mode)
 }
+

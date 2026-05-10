@@ -6,11 +6,17 @@ pub struct SafetyBufferPool<const N: usize, const CAPACITY: usize> {
     free_count: usize,
 }
 
+impl<const N: usize, const CAPACITY: usize> Default for SafetyBufferPool<N, CAPACITY> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const N: usize, const CAPACITY: usize> SafetyBufferPool<N, CAPACITY> {
     pub fn new() -> Self {
         Self {
-            buffers: std::array::from_fn(|_| PayloadStorage::new()),
-            free_indices: std::array::from_fn(|i| i),
+            buffers: core::array::from_fn(|_| PayloadStorage::new()),
+            free_indices: core::array::from_fn(|i| i),
             free_count: CAPACITY,
         }
     }
