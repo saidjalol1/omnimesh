@@ -51,19 +51,16 @@ pub mod layer_kinds {
     pub const OPTIONAL_SECURITY: &str = "optional security";
     pub const MINIMAL_SECURITY: &str = "minimal security";
     pub const STANDARD_SECURITY: &str = "standard security";
-    pub const CERTIFIED_SECURITY: &str = "certified security";
     
     // Storage layer kinds
     pub const DEVELOPMENT_STORAGE: &str = "development storage";
     pub const EPHEMERAL_STORAGE: &str = "ephemeral storage";
     pub const PERSISTENT_STORAGE: &str = "persistent storage";
-    pub const CERTIFIED_STORAGE: &str = "certified storage";
     
     // Delivery layer kinds
     pub const BEST_EFFORT_DELIVERY: &str = "best-effort delivery";
     pub const LIGHTWEIGHT_DELIVERY: &str = "lightweight delivery";
     pub const RELIABLE_DELIVERY: &str = "reliable delivery";
-    pub const CERTIFIED_DELIVERY: &str = "certified delivery";
 }
 
 #[derive(Debug, Clone)]
@@ -96,21 +93,10 @@ pub struct ProductionConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct CertifiedConfig {
-    pub crypto_enabled: bool,
-    pub exactly_once_enabled: bool,
-    pub ordering_enabled: bool,
-    pub wcet_enforcement: WcetMode,
-    pub hsm_signer_required: bool,
-    pub certified_build: bool,
-}
-
-#[derive(Debug, Clone)]
 pub enum OmnimeshMode {
     Development(DevelopmentConfig),
     Lightweight(LightweightConfig),
     Production(ProductionConfig),
-    Certified(CertifiedConfig),
 }
 
 impl Default for OmnimeshMode {
@@ -155,27 +141,17 @@ impl OmnimeshMode {
             exactly_once_enabled: true,
             ordering_enabled: true,
             dtn_enabled: true,
-            dtn_path: None,
+            dtn_path: Some("/tmp/omnimesh-dtn".into()),
         })
     }
 
-    pub fn certified() -> Self {
-        OmnimeshMode::Certified(CertifiedConfig {
-            crypto_enabled: true,
-            exactly_once_enabled: true,
-            ordering_enabled: true,
-            wcet_enforcement: WcetMode::HardFail,
-            hsm_signer_required: true,
-            certified_build: true,
-        })
-    }
+
 
     pub fn transport_type(&self) -> TransportType {
         match self {
             OmnimeshMode::Development(_) => TransportType::Mock,
             OmnimeshMode::Lightweight(_) => TransportType::Tcp,
-            OmnimeshMode::Production(_) => TransportType::Quic,
-            OmnimeshMode::Certified(_) => TransportType::Quic,
+            OmnimeshMode::Production(_) => TransportType::Tcp, // Changed to TCP for stability
         }
     }
 }

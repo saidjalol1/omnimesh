@@ -2,6 +2,7 @@ use crate::config::OmnimeshMode;
 use crate::config::modes::layer_kinds;
 use crate::envelope::{Did, MessageId, SignedEnvelope};
 use crate::runtime::RuntimeLayer;
+use crate::runtime::storage::DtnStore;
 use crate::buffer::{FixedMap, RingBuffer};
 use std::sync::Mutex;
 
@@ -23,6 +24,7 @@ pub struct OrderedChannel<const N: usize> {
     next_expected: FixedMap<(Did, Did), u64, 256>,
     seen_ring: RingBuffer<MessageId, 4096>,
     pending: FixedMap<((Did, Did), u64), PendingMessage<N>, 256>,
+    persistent_dedup: Option<DtnStore>,
 }
 
 impl<const N: usize> Default for OrderedChannel<N> {
@@ -37,6 +39,16 @@ impl<const N: usize> OrderedChannel<N> {
             next_expected: FixedMap::new(),
             seen_ring: RingBuffer::new(),
             pending: FixedMap::new(),
+            persistent_dedup: None,
+        }
+    }
+
+    pub fn with_persistent_dedup(dtn_store: DtnStore) -> Self {
+        Self {
+            next_expected: FixedMap::new(),
+            seen_ring: RingBuffer::new(),
+            pending: FixedMap::new(),
+            persistent_dedup: Some(dtn_store),
         }
     }
 
@@ -44,6 +56,14 @@ impl<const N: usize> OrderedChannel<N> {
         let msg_id = envelope.header.message_id;
         
         // 1. Deduplication (Exactly-Once)
+        // Check persistent store first (if available)
+        if let Some(ref persistent) = self.persistent_dedup {
+            if persistent.has_seen_message(&msg_id) {
+                return DeliveryStatus::Duplicate;
+            }
+        }
+        
+        // Then check ring buffer (fast path)
         if self.seen_ring.contains(|id| *id == msg_id) {
             return DeliveryStatus::Duplicate;
         }
@@ -61,13 +81,25 @@ impl<const N: usize> OrderedChannel<N> {
             // Deliver current
             self.seen_ring.insert(msg_id);
             
+            // Mark as seen in persistent store
+            if let Some(ref persistent) = self.persistent_dedup {
+                let _ = persistent.mark_message_seen(&msg_id);
+            }
+            
             // Advance expected
             let mut next = seq + 1;
             let _ = self.next_expected.insert(channel_id, next);
 
             // Attempt to deliver buffered
             while let Some(pending) = self.pending.remove(&(channel_id, next)) {
-                self.seen_ring.insert(pending.envelope.header.message_id);
+                let pending_msg_id = pending.envelope.header.message_id;
+                self.seen_ring.insert(pending_msg_id);
+                
+                // Mark buffered messages as seen too
+                if let Some(ref persistent) = self.persistent_dedup {
+                    let _ = persistent.mark_message_seen(&pending_msg_id);
+                }
+                
                 next += 1;
                 let _ = self.next_expected.insert(channel_id, next);
             }
@@ -87,6 +119,8 @@ impl<const N: usize> OrderedChannel<N> {
 pub struct DeliveryLayer {
     kind: &'static str,
     channel: Mutex<OrderedChannel<128>>,
+    #[allow(dead_code)]
+    mode: OmnimeshMode,
 }
 
 impl std::fmt::Debug for DeliveryLayer {
@@ -103,12 +137,29 @@ impl DeliveryLayer {
             OmnimeshMode::Development(_) => layer_kinds::BEST_EFFORT_DELIVERY,
             OmnimeshMode::Lightweight(_) => layer_kinds::LIGHTWEIGHT_DELIVERY,
             OmnimeshMode::Production(_) => layer_kinds::RELIABLE_DELIVERY,
-            OmnimeshMode::Certified(_) => layer_kinds::CERTIFIED_DELIVERY,
+        };
+
+        // Create channel with persistent deduplication for production mode
+        let channel = match mode {
+            OmnimeshMode::Production(cfg) if cfg.dtn_enabled => {
+                if let Some(ref path) = cfg.dtn_path {
+                    // Use same DTN store for deduplication
+                    if let Ok(dtn_store) = DtnStore::new(path) {
+                        OrderedChannel::with_persistent_dedup(dtn_store)
+                    } else {
+                        OrderedChannel::new()
+                    }
+                } else {
+                    OrderedChannel::new()
+                }
+            }
+            _ => OrderedChannel::new(),
         };
 
         DeliveryLayer {
             kind,
-            channel: Mutex::new(OrderedChannel::new()),
+            channel: Mutex::new(channel),
+            mode: mode.clone(),
         }
     }
 
@@ -137,6 +188,16 @@ impl DeliveryLayer {
         );
         
         Ok(status)
+    }
+    
+    /// Clean up old deduplication entries (call periodically)
+    pub fn cleanup_old_dedup_entries(&self, retention_seconds: u64) -> Result<usize, String> {
+        let channel = self.channel.lock().unwrap();
+        if let Some(ref persistent) = channel.persistent_dedup {
+            persistent.cleanup_old_seen_messages(retention_seconds)
+        } else {
+            Ok(0)
+        }
     }
 }
 

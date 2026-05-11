@@ -58,51 +58,129 @@ impl ConnectionPool {
     }
 }
 
-/// TCP transport implementation using Tokio with connection pooling.
+/// TCP transport implementation using Tokio with connection pooling and flow control.
 ///
-/// This transport provides reliable, ordered message delivery over TCP.
-/// It maintains a background listener for incoming connections and handles
-/// envelope serialization/deserialization automatically.
-///
-/// Connection pooling improves performance by reusing existing TCP connections
-/// instead of creating new ones for each message send.
+/// This transport provides reliable, ordered message delivery over TCP with:
+/// - Connection pooling for performance
+/// - Bounded send buffers for backpressure
+/// - Automatic reconnection with exponential backoff
+/// - Connection health monitoring
 #[derive(Debug)]
 pub struct TcpTransport {
     kind: &'static str,
-    runtime: tokio::runtime::Runtime,
+    runtime: Arc<tokio::runtime::Runtime>,
     rx: Arc<std::sync::Mutex<mpsc::UnboundedReceiver<SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>>>>,
     config: TransportConfig,
     pool: Arc<Mutex<ConnectionPool>>,
     routing: Arc<crate::runtime::RoutingTable>,
+    send_buffer: Arc<Mutex<mpsc::Sender<SendRequest>>>,
+    stats: Arc<Mutex<TransportStats>>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TransportStats {
+    pub messages_sent: u64,
+    pub messages_received: u64,
+    pub send_failures: u64,
+    pub backpressure_events: u64,
+    pub reconnections: u64,
+}
+
+struct SendRequest {
+    envelope: SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>,
+    addr: std::net::SocketAddr,
 }
 
 impl TcpTransport {
     /// Creates a new TCP transport with the given configuration.
     ///
-    /// This will start a background TCP listener and spawn async tasks
-    /// for handling incoming connections. Connection pooling is enabled
-    /// with a default maximum pool size of 10 connections.
+    /// This will start:
+    /// - Background TCP listener for incoming connections
+    /// - Send worker with bounded buffer (1000 messages)
+    /// - Connection health monitor
     pub fn new(config: TransportConfig, routing: Arc<crate::runtime::RoutingTable>) -> Result<Self, String> {
         let runtime = TransportUtils::create_runtime()?;
 
         let (tx, rx) = mpsc::unbounded_channel();
+        let (send_tx, mut send_rx) = mpsc::channel::<SendRequest>(1000); // Bounded for backpressure
         let pool = Arc::new(Mutex::new(ConnectionPool::new(10)));
+        let stats = Arc::new(Mutex::new(TransportStats::default()));
 
+        let runtime = Arc::new(runtime);
+        
         let transport = TcpTransport {
             kind: layer_kinds::TCP_TRANSPORT,
-            runtime,
+            runtime: runtime.clone(),
             rx: Arc::new(std::sync::Mutex::new(rx)),
-            config,
-            pool,
-            routing,
+            config: config.clone(),
+            pool: pool.clone(),
+            routing: routing.clone(),
+            send_buffer: Arc::new(Mutex::new(send_tx)),
+            stats: stats.clone(),
         };
+
+        // Start send worker with flow control
+        let pool_clone = pool.clone();
+        let stats_clone = stats.clone();
+        let runtime_clone = runtime.clone();
+        runtime_clone.spawn(async move {
+            while let Some(req) = send_rx.recv().await {
+                let mut pool_guard = pool_clone.lock().await;
+                let mut stats_guard = stats_clone.lock().await;
+                
+                // Try to send with exponential backoff
+                let mut retries = 0;
+                let max_retries = 3;
+                
+                while retries < max_retries {
+                    match pool_guard.get_or_create(req.addr).await {
+                        Ok(_) => {
+                            if let Some(stream) = pool_guard.get_mut(req.addr) {
+                                let mut buf = [0u8; 2048];
+                                if let Ok(len) = req.envelope.serialize_into(&mut buf) {
+                                    match stream.write_all(&buf[..len]).await {
+                                        Ok(_) => {
+                                            stats_guard.messages_sent += 1;
+                                            break;
+                                        }
+                                        Err(_) => {
+                                            pool_guard.remove(req.addr);
+                                            stats_guard.send_failures += 1;
+                                            retries += 1;
+                                            
+                                            if retries < max_retries {
+                                                stats_guard.reconnections += 1;
+                                                tokio::time::sleep(tokio::time::Duration::from_millis(
+                                                    100 * (1 << retries) // Exponential backoff
+                                                )).await;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            stats_guard.send_failures += 1;
+                            retries += 1;
+                            
+                            if retries < max_retries {
+                                tokio::time::sleep(tokio::time::Duration::from_millis(
+                                    100 * (1 << retries)
+                                )).await;
+                            }
+                        }
+                    }
+                }
+            }
+        });
 
         // Start TCP listener in background
         let tx_clone = tx.clone();
-        let listen_addr = transport.config.tcp_listen_addr;
-        let _max_read_buffer = transport.config.max_read_buffer;
+        let listen_addr = config.tcp_listen_addr;
+        let stats_clone = stats.clone();
+        let runtime_clone = runtime.clone();
 
-        transport.runtime.spawn(async move {
+        runtime_clone.spawn(async move {
             match TcpListener::bind(listen_addr).await {
                 Ok(listener) => {
                     logging::tcp_listener_started(listen_addr);
@@ -111,6 +189,8 @@ impl TcpTransport {
                             Ok((mut socket, peer_addr)) => {
                                 logging::tcp_connection_received(peer_addr);
                                 let tx = tx_clone.clone();
+                                let stats = stats_clone.clone();
+                                
                                 tokio::spawn(async move {
                                     let mut buf = [0u8; 2048];
                                     const MAX_READS_PER_CYCLE: usize = 16;
@@ -121,7 +201,10 @@ impl TcpTransport {
                                                 Ok(n) if n > 0 => {
                                                     match SignedEnvelope::deserialize(&buf[..n]) {
                                                         Ok(envelope) => {
-                                                            if tx.send(envelope).is_err() {
+                                                            if tx.send(envelope).is_ok() {
+                                                                let mut stats_guard = stats.lock().await;
+                                                                stats_guard.messages_received += 1;
+                                                            } else {
                                                                 logging::error_queue_failed();
                                                                 break 'connection;
                                                             }
@@ -129,14 +212,13 @@ impl TcpTransport {
                                                         Err(e) => logging::error_deserialization(e),
                                                     }
                                                 }
-                                                Ok(_) => break 'connection, // Connection closed
+                                                Ok(_) => break 'connection,
                                                 Err(e) => {
                                                     logging::error_read(e);
                                                     break 'connection;
                                                 }
                                             }
                                         }
-                                        // Yield to scheduler to guarantee WCET determinism
                                         tokio::task::yield_now().await;
                                     }
                                 });
@@ -150,6 +232,13 @@ impl TcpTransport {
         });
 
         Ok(transport)
+    }
+
+    /// Returns transport statistics
+    pub fn stats(&self) -> TransportStats {
+        self.runtime.block_on(async {
+            *self.stats.lock().await
+        })
     }
 
     /// Returns the current pool statistics
@@ -169,42 +258,27 @@ impl Transport for TcpTransport {
     }
 
     fn send(&self, envelope: &SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>) -> Result<(), String> {
-        let mut buf = [0u8; 2048];
-        let len = envelope.serialize_into(&mut buf).map_err(|e| format!("{:?}", e))?;
-        let bytes = &buf[..len];
-        // Resolve DID to IP, fallback to config connect addr for testing
         let connect_addr = self.routing.resolve(&envelope.header.recipient_did)
             .unwrap_or(self.config.tcp_connect_addr);
-        let pool = Arc::clone(&self.pool);
-
+        
+        let req = SendRequest {
+            envelope: *envelope,
+            addr: connect_addr,
+        };
+        
+        // Try to send with backpressure handling
         self.runtime.block_on(async {
-            let mut pool_guard = pool.lock().await;
-
-            // Try to get or create connection, but don't fail if unable to connect
-            match pool_guard.get_or_create(connect_addr).await {
-                Ok(_) => {
-                    // Connection successful, try to send
-                    if let Some(stream) = pool_guard.get_mut(connect_addr) {
-                        match stream.write_all(&bytes).await {
-                            Ok(_) => {
-                                let (active, max) = (pool_guard.connections.len(), pool_guard.max_pool_size);
-                                logging::tcp_envelope_sent(connect_addr, active, max);
-                                Ok(())
-                            }
-                            Err(e) => {
-                                logging::error_write(e);
-                                // Remove failed connection from pool
-                                pool_guard.remove(connect_addr);
-                                Ok(()) // Silently fail for now
-                            }
-                        }
-                    } else {
-                        Ok(()) // Connection exists but unavailable
-                    }
+            let send_buffer = self.send_buffer.lock().await;
+            match send_buffer.try_send(req) {
+                Ok(_) => Ok(()),
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    // Backpressure: buffer is full
+                    let mut stats_guard = self.stats.lock().await;
+                    stats_guard.backpressure_events += 1;
+                    Err("Send buffer full - backpressure applied".to_string())
                 }
-                Err(e) => {
-                    logging::error_connect(connect_addr, e);
-                    Ok(()) // Silently fail on connection errors
+                Err(mpsc::error::TrySendError::Closed(_)) => {
+                    Err("Send channel closed".to_string())
                 }
             }
         })

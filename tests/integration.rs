@@ -67,7 +67,13 @@ fn end_to_end_sign_verify_deliver_store() {
 
     // --- 4. Store (StorageLayer) ---
     let mut storage = StorageLayer::new(&mode);
-    storage.store(envelope.clone()).expect("storage must succeed");
+    
+    // Convert to DEFAULT_PAYLOAD_CAPACITY size for storage
+    let mut payload_1024 = omnimesh::buffer::PayloadStorage::<1024>::new();
+    payload_1024.push_bytes(envelope.payload.as_slice()).unwrap();
+    let envelope_1024 = SignedEnvelope::new(envelope.header, payload_1024, envelope.signature);
+    
+    storage.store(envelope_1024.clone()).expect("storage must succeed");
     assert_eq!(storage.stored_count(), 1);
 
     // --- 5. Decode the payload back ---

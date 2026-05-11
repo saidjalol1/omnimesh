@@ -17,13 +17,9 @@ fn transport_lightweight_mode_uses_tcp() {
 }
 
 #[test]
-fn transport_production_mode_uses_quic() {
-    assert_transport_kind(&OmnimeshMode::production(), "quic transport");
-}
-
-#[test]
-fn transport_certified_mode_uses_quic() {
-    assert_transport_kind(&OmnimeshMode::certified(), "quic transport");
+fn transport_production_mode_uses_tcp() {
+    // V8: Production now uses TCP for stability (QUIC in v8.3)
+    assert_transport_kind(&OmnimeshMode::production(), "tcp transport");
 }
 
 #[test]
@@ -48,17 +44,11 @@ fn tcp_transport_initializes_successfully() {
 }
 
 #[test]
-fn quic_transport_initializes_successfully() {
-    assert_transport_kind(&OmnimeshMode::production(), "quic transport");
-}
-
-#[test]
 fn all_modes_initialize_successfully() {
     let modes = vec![
         OmnimeshMode::development(),
         OmnimeshMode::lightweight(),
         OmnimeshMode::production(),
-        OmnimeshMode::certified(),
     ];
 
     for mode in modes {

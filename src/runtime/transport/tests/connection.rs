@@ -50,7 +50,6 @@ fn all_transports_initialize_without_panic() {
         OmnimeshMode::development(),
         OmnimeshMode::lightweight(),
         OmnimeshMode::production(),
-        OmnimeshMode::certified(),
     ];
 
     for mode in modes {

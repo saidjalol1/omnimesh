@@ -68,7 +68,7 @@ impl RoutingTable {
     }
 
     /// Spawns a background Tokio task to broadcast known routes over UDP multicast.
-    pub fn start_gossip_task(self: Arc<Self>, interval_ms: u64, bind_addr: SocketAddr) {
+    pub fn start_gossip_task(self: Arc<Self>, interval_ms: u64, bind_addr: SocketAddr, broadcast_addr: SocketAddr) {
         let task = async move {
             let socket = match tokio::net::UdpSocket::bind(bind_addr).await {
                 Ok(s) => Arc::new(s),
@@ -79,8 +79,7 @@ impl RoutingTable {
             };
             
             socket.set_broadcast(true).unwrap_or_default();
-            let broadcast_addr: std::net::SocketAddr = "255.255.255.255:9999".parse().unwrap();
-
+            
             // Spawn listener task
             let listen_socket = socket.clone();
             let table_clone = self.clone();
@@ -130,7 +129,7 @@ impl RoutingTable {
                 let _ = socket.send_to(&buf, broadcast_addr).await;
             }
         };
-
+            
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
             handle.spawn(task);
         } else {

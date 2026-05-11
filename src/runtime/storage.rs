@@ -33,6 +33,56 @@ impl DtnStore {
         Ok(())
     }
 
+    /// Check if a message ID has been seen before (for persistent deduplication)
+    pub fn has_seen_message(&self, message_id: &crate::envelope::MessageId) -> bool {
+        let key = format!("seen:{}", hex::encode(message_id.0));
+        self.db.contains_key(key.as_bytes()).unwrap_or(false)
+    }
+
+    /// Mark a message ID as seen (for persistent deduplication)
+    pub fn mark_message_seen(&self, message_id: &crate::envelope::MessageId) -> Result<(), String> {
+        let key = format!("seen:{}", hex::encode(message_id.0));
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        self.db.insert(key.as_bytes(), &timestamp.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// Clean up old seen message IDs (older than retention_seconds)
+    pub fn cleanup_old_seen_messages(&self, retention_seconds: u64) -> Result<usize, String> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        
+        let mut removed = 0;
+        let prefix = b"seen:";
+        
+        for item in self.db.scan_prefix(prefix) {
+            if let Ok((key, val)) = item {
+                if val.len() >= 8 {
+                    let mut bytes = [0u8; 8];
+                    bytes.copy_from_slice(&val[..8]);
+                    let timestamp = u64::from_le_bytes(bytes);
+                    
+                    if now - timestamp > retention_seconds {
+                        self.db.remove(key).map_err(|e| e.to_string())?;
+                        removed += 1;
+                    }
+                }
+            }
+        }
+        
+        if removed > 0 {
+            self.db.flush().map_err(|e| e.to_string())?;
+        }
+        
+        Ok(removed)
+    }
+
     /// Stores a message specifically for DTN mule routing
     pub fn store_for_mule<const N: usize>(&self, envelope: &SignedEnvelope<N>) -> Result<(), String> {
         self.store_envelope(envelope)
@@ -85,7 +135,6 @@ impl StorageLayer {
                     }
                 layer_kinds::PERSISTENT_STORAGE
             }
-            OmnimeshMode::Certified(_) => layer_kinds::CERTIFIED_STORAGE,
         };
 
         StorageLayer {

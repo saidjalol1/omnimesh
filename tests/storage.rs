@@ -3,6 +3,8 @@ use omnimesh::config::OmnimeshMode;
 use omnimesh::envelope::{EnvelopeHeader, MessageId, Did, PayloadType, Priority, SignedEnvelope};
 use omnimesh::runtime::storage::StorageLayer;
 
+const STORAGE_PAYLOAD_SIZE: usize = 1024; // Match DEFAULT_PAYLOAD_CAPACITY
+
 #[test]
 fn storage_store_increases_count() {
     let mut storage = StorageLayer::new(&OmnimeshMode::development());
@@ -18,7 +20,7 @@ fn storage_store_increases_count() {
         Priority::Normal,
         PayloadType::Raw,
     );
-    let payload = PayloadStorage::<128>::new();
+    let payload = PayloadStorage::<STORAGE_PAYLOAD_SIZE>::new();
     let envelope = SignedEnvelope::new(header, payload, [1u8; 64]);
 
     storage.store(envelope).unwrap();
@@ -39,7 +41,7 @@ fn storage_last_stored_returns_most_recent() {
         Priority::Normal,
         PayloadType::Raw,
     );
-    let payload1 = PayloadStorage::<128>::new();
+    let payload1 = PayloadStorage::<STORAGE_PAYLOAD_SIZE>::new();
     let envelope1 = SignedEnvelope::new(header1, payload1, [1u8; 64]);
 
     let header2 = EnvelopeHeader::new(
@@ -52,7 +54,7 @@ fn storage_last_stored_returns_most_recent() {
         Priority::High,
         PayloadType::RobotCommand,
     );
-    let payload2 = PayloadStorage::<128>::new();
+    let payload2 = PayloadStorage::<STORAGE_PAYLOAD_SIZE>::new();
     let envelope2 = SignedEnvelope::new(header2, payload2, [2u8; 64]);
 
     storage.store(envelope1).unwrap();

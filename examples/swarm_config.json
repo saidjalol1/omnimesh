@@ -1,0 +1,34 @@
+{
+  "model": "phi3",
+  "num_predict": 100,
+  "agents": [
+    {
+      "name": "Alice",
+      "host": "127.0.0.1",
+      "port": 9010,
+      "target_port": 9020,
+      "is_starter": true
+    },
+    {
+      "name": "Bob",
+      "host": "127.0.0.1",
+      "port": 9020,
+      "target_port": 9030,
+      "is_starter": false
+    },
+    {
+      "name": "Charlie",
+      "host": "127.0.0.1",
+      "port": 9030,
+      "target_port": 9040,
+      "is_starter": false
+    },
+    {
+      "name": "Dave",
+      "host": "127.0.0.1",
+      "port": 9040,
+      "target_port": 9010,
+      "is_starter": false
+    }
+  ]
+}

@@ -30,6 +30,58 @@ pub struct NodeConfig {
     pub listen_addresses: Vec<String>,
     #[serde(default)]
     pub known_peers: Vec<String>,
+    #[serde(default)]
+    pub transport: NodeTransportConfig,
+}
+
+/// Transport configuration parsed from [node.transport] section
+#[derive(Debug, Deserialize, Clone)]
+pub struct NodeTransportConfig {
+    /// Transport type: "tcp", "quic", or "both"
+    #[serde(default = "default_transport_type", rename = "type")]
+    pub transport_type: String,
+    /// TCP listen address
+    #[serde(default = "default_tcp_listen")]
+    pub tcp_listen_addr: String,
+    /// TCP default connect address (fallback target)
+    #[serde(default = "default_tcp_connect")]
+    pub tcp_connect_addr: String,
+    /// QUIC listen address
+    #[serde(default = "default_quic_listen")]
+    pub quic_listen_addr: String,
+    /// Max read buffer size
+    #[serde(default = "default_max_read_buffer")]
+    pub max_read_buffer: usize,
+}
+
+impl Default for NodeTransportConfig {
+    fn default() -> Self {
+        Self {
+            transport_type: "tcp".into(),
+            tcp_listen_addr: "0.0.0.0:9000".into(),
+            tcp_connect_addr: "127.0.0.1:9001".into(),
+            quic_listen_addr: "0.0.0.0:9443".into(),
+            max_read_buffer: 1048576,
+        }
+    }
+}
+
+impl NodeTransportConfig {
+    /// Convert to runtime TransportConfig
+    pub fn to_transport_config(&self) -> Result<crate::runtime::transport::config::TransportConfig, String> {
+        let tcp_listen = self.tcp_listen_addr.parse()
+            .map_err(|e| format!("Invalid tcp_listen_addr '{}': {}", self.tcp_listen_addr, e))?;
+        let tcp_connect = self.tcp_connect_addr.parse()
+            .map_err(|e| format!("Invalid tcp_connect_addr '{}': {}", self.tcp_connect_addr, e))?;
+        let quic_listen = self.quic_listen_addr.parse()
+            .map_err(|e| format!("Invalid quic_listen_addr '{}': {}", self.quic_listen_addr, e))?;
+        
+        let mut config = crate::runtime::transport::config::TransportConfig::new(
+            tcp_listen, tcp_connect, quic_listen,
+        );
+        config.max_read_buffer = self.max_read_buffer;
+        Ok(config)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,8 +97,6 @@ pub struct ModeConfigs {
     pub lightweight: LightModeConfig,
     #[serde(default)]
     pub production: ProdModeConfig,
-    #[serde(default)]
-    pub certified: CertModeConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -130,35 +180,6 @@ impl Default for ProdModeConfig {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CertModeConfig {
-    #[serde(default = "default_true")]
-    pub crypto_enabled: bool,
-    #[serde(default = "default_true")]
-    pub exactly_once: bool,
-    #[serde(default = "default_true")]
-    pub ordering: bool,
-    #[serde(default = "default_hard_fail")]
-    pub wcet_enforcement: String,
-    #[serde(default = "default_true")]
-    pub hsm_required: bool,
-    #[serde(default = "default_true")]
-    pub certified_build: bool,
-}
-
-impl Default for CertModeConfig {
-    fn default() -> Self {
-        Self {
-            crypto_enabled: true,
-            exactly_once: true,
-            ordering: true,
-            wcet_enforcement: "hard_fail".into(),
-            hsm_required: true,
-            certified_build: true,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
 pub struct RoutingConfig {
     #[serde(default = "default_32")]
     pub max_neighbors: usize,
@@ -170,6 +191,9 @@ pub struct RoutingConfig {
     pub dtn_max_messages: u32,
     #[serde(default = "default_1024_u64")]
     pub dtn_max_bytes_mb: u64,
+    /// Gossip UDP bind address
+    #[serde(default = "default_gossip_bind")]
+    pub gossip_bind_addr: String,
 }
 
 impl Default for RoutingConfig {
@@ -180,6 +204,7 @@ impl Default for RoutingConfig {
             gossip_interval_ms: 1000,
             dtn_max_messages: 10000,
             dtn_max_bytes_mb: 1024,
+            gossip_bind_addr: "0.0.0.0:9999".into(),
         }
     }
 }
@@ -208,7 +233,6 @@ impl Default for WcetConfig {
 fn default_true() -> bool { true }
 fn default_crypto_optional() -> String { "optional".into() }
 fn default_wcet_log() -> String { "log".into() }
-fn default_hard_fail() -> String { "hard_fail".into() }
 fn default_pool_size() -> usize { 1024 }
 fn default_buffer_capacity() -> usize { 8192 }
 fn default_light_pool() -> usize { 256 }
@@ -220,6 +244,12 @@ fn default_1000() -> u64 { 1000 }
 fn default_10000() -> u32 { 10000 }
 fn default_500() -> u64 { 500 }
 fn default_100() -> u64 { 100 }
+fn default_transport_type() -> String { "tcp".into() }
+fn default_tcp_listen() -> String { "0.0.0.0:9000".into() }
+fn default_tcp_connect() -> String { "127.0.0.1:9001".into() }
+fn default_quic_listen() -> String { "0.0.0.0:9443".into() }
+fn default_max_read_buffer() -> usize { 1048576 }
+fn default_gossip_bind() -> String { "0.0.0.0:9999".into() }
 
 impl ConfigFile {
     /// Load configuration from a TOML file.
@@ -266,20 +296,6 @@ impl ConfigFile {
                     ordering_enabled: self.mode.production.ordering,
                     dtn_enabled: self.mode.production.dtn_enabled,
                     dtn_path: self.mode.production.dtn_path.as_ref().map(|s| s.into()),
-                }))
-            }
-            "certified" => {
-                let wcet = match self.mode.certified.wcet_enforcement.as_str() {
-                    "hard_fail" => WcetMode::HardFail,
-                    _ => WcetMode::Log,
-                };
-                Ok(OmnimeshMode::Certified(CertifiedConfig {
-                    crypto_enabled: self.mode.certified.crypto_enabled,
-                    exactly_once_enabled: self.mode.certified.exactly_once,
-                    ordering_enabled: self.mode.certified.ordering,
-                    wcet_enforcement: wcet,
-                    hsm_signer_required: self.mode.certified.hsm_required,
-                    certified_build: self.mode.certified.certified_build,
                 }))
             }
             other => Err(format!("Unknown mode: {}", other)),

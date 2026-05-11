@@ -43,7 +43,6 @@ impl SecurityLayer {
             OmnimeshMode::Development(_) => (layer_kinds::OPTIONAL_SECURITY, false),
             OmnimeshMode::Lightweight(_) => (layer_kinds::MINIMAL_SECURITY, false),
             OmnimeshMode::Production(_) => (layer_kinds::STANDARD_SECURITY, true),
-            OmnimeshMode::Certified(_) => (layer_kinds::CERTIFIED_SECURITY, true),
         };
 
         SecurityLayer { kind, crypto_required, _signer: signer }

@@ -35,8 +35,9 @@ impl TransportLayer {
         };
 
         if !matches!(mode.transport_type(), TransportType::Mock) {
-            let gossip_addr = "0.0.0.0:8888".parse().unwrap();
-            routing.clone().start_gossip_task(1000, gossip_addr);
+            let gossip_addr = config.tcp_listen_addr;
+            let broadcast_addr: std::net::SocketAddr = "255.255.255.255:9999".parse().unwrap();
+            routing.clone().start_gossip_task(1000, gossip_addr, broadcast_addr);
         }
 
         Ok(TransportLayer { transport, config, routing })
@@ -54,8 +55,9 @@ impl TransportLayer {
         };
 
         if !matches!(mode.transport_type(), TransportType::Mock) {
-            let gossip_addr = "0.0.0.0:8888".parse().unwrap();
-            routing.clone().start_gossip_task(1000, gossip_addr);
+            let gossip_addr = config.tcp_listen_addr;
+            let broadcast_addr: std::net::SocketAddr = "255.255.255.255:9999".parse().unwrap();
+            routing.clone().start_gossip_task(1000, gossip_addr, broadcast_addr);
         }
 
         Ok(TransportLayer { transport, config, routing })

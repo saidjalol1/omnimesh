@@ -21,7 +21,8 @@ fn transport_receive_returns_valid_envelope() {
 fn transport_layer_kind_matches_mode() {
     assert_transport_kind(&OmnimeshMode::development(), "mock transport");
     assert_transport_kind(&OmnimeshMode::lightweight(), "tcp transport");
-    assert_transport_kind(&OmnimeshMode::production(), "quic transport");
+    // V8: Production uses TCP for stability (QUIC in v8.3)
+    assert_transport_kind(&OmnimeshMode::production(), "tcp transport");
 }
 
 #[test]
@@ -64,8 +65,9 @@ fn transport_layer_lightweight_uses_tcp() {
 }
 
 #[test]
-fn transport_layer_production_uses_quic() {
-    assert_transport_kind(&OmnimeshMode::production(), "quic transport");
+fn transport_layer_production_uses_tcp() {
+    // V8: Production uses TCP for stability (QUIC in v8.3)
+    assert_transport_kind(&OmnimeshMode::production(), "tcp transport");
 }
 
 #[test]

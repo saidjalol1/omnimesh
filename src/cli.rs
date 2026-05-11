@@ -8,7 +8,6 @@ pub fn run() -> Result<(), String> {
         "development" => OmnimeshMode::development(),
         "lightweight" => OmnimeshMode::lightweight(),
         "production" => OmnimeshMode::production(),
-        "certified" => OmnimeshMode::certified(),
         _ => {
             eprintln!("Unknown OMNIMESH_MODE='{}'. Falling back to development.", selected_mode);
             OmnimeshMode::development()
