@@ -125,3 +125,37 @@ where
     let wcet = guard.finish()?;
     Ok((result, wcet))
 }
+
+/// Initialize the current thread with real-time OS priorities and CPU pinning.
+/// This should be called once per critical thread (e.g., networking event loop, WCET critical paths).
+#[cfg(feature = "std")]
+pub fn init_realtime_thread(core_id: Option<usize>) {
+    // 1. Pin to specific CPU core to prevent OS scheduler from migrating the thread
+    #[cfg(feature = "core_affinity")]
+    if let Some(id) = core_id {
+        let core_ids = core_affinity::get_core_ids().unwrap_or_default();
+        if id < core_ids.len() {
+            if core_affinity::set_for_current(core_ids[id]) {
+                println!("WCET: Thread pinned to CPU core {}", id);
+            } else {
+                eprintln!("WCET WARNING: Failed to pin thread to CPU core {}", id);
+            }
+        } else {
+            eprintln!("WCET WARNING: Requested core ID {} exceeds available cores", id);
+        }
+    }
+
+    #[cfg(not(feature = "core_affinity"))]
+    let _ = core_id;
+
+    // 2. Elevate OS-level thread priority
+    #[cfg(feature = "thread-priority")]
+    {
+        use thread_priority::*;
+        if let Err(e) = set_current_thread_priority(ThreadPriority::Max) {
+            eprintln!("WCET WARNING: Failed to set Max thread priority: {:?}", e);
+        } else {
+            println!("WCET: Thread priority elevated to Max");
+        }
+    }
+}

@@ -24,7 +24,7 @@ fn main() -> Result<(), String> {
     println!("Operating Mode: {:?}", runtime_config.mode);
     
     // Pass config to runtime (will be fully async later)
-    if let Err(e) = omnimesh::runtime::run(runtime_config.mode) {
+    if let Err(e) = omnimesh::runtime::run(runtime_config.mode, runtime_config.node_id) {
         eprintln!("Daemon crashed: {}", e);
         std::process::exit(1);
     }

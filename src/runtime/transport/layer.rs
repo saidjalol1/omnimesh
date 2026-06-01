@@ -1,6 +1,6 @@
 use crate::config::OmnimeshMode;
 use crate::config::modes::TransportType;
-use crate::envelope::SignedEnvelope;
+use crate::envelope::{Did, SignedEnvelope};
 use crate::runtime::transport::config::TransportConfig;
 use crate::runtime::transport::mock::MockTransport;
 use crate::runtime::transport::quic::QuicTransport;
@@ -31,6 +31,29 @@ impl TransportLayer {
         let transport: Box<dyn Transport> = match mode.transport_type() {
             TransportType::Mock => Box::new(MockTransport::new(routing.clone())),
             TransportType::Tcp => Box::new(TcpTransport::new(config.clone(), routing.clone())?),
+            TransportType::Quic => Box::new(QuicTransport::new(config.clone(), routing.clone())?),
+        };
+
+        if !matches!(mode.transport_type(), TransportType::Mock) {
+            let gossip_addr = config.tcp_listen_addr;
+            let broadcast_addr: std::net::SocketAddr = "255.255.255.255:9999".parse().unwrap();
+            routing.clone().start_gossip_task(1000, gossip_addr, broadcast_addr);
+        }
+
+        Ok(TransportLayer { transport, config, routing })
+    }
+
+    /// Creates a transport layer and binds the Mock transport to `local_did`.
+    ///
+    /// Used by the SDK so each `OmnimeshClient` only receives messages
+    /// that are addressed to its own DID on the shared in-process bus.
+    pub fn new_with_did(mode: &OmnimeshMode, local_did: Did) -> Result<Self, String> {
+        let config = TransportConfig::default();
+        let routing = std::sync::Arc::new(crate::runtime::RoutingTable::new());
+
+        let transport: Box<dyn Transport> = match mode.transport_type() {
+            TransportType::Mock => Box::new(MockTransport::new(routing.clone()).with_did(local_did)),
+            TransportType::Tcp  => Box::new(TcpTransport::new(config.clone(), routing.clone())?),
             TransportType::Quic => Box::new(QuicTransport::new(config.clone(), routing.clone())?),
         };
 

@@ -1,7 +1,8 @@
 use crate::envelope::Did;
 use crate::buffer::FixedMap;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Neighbor information tracking for routing
 #[derive(Debug, Clone, Copy)]
@@ -43,9 +44,10 @@ impl RoutingTable {
     /// Update or add a route
     pub fn update_route(&self, did: Did, addr: SocketAddr) {
         if let Ok(mut routes) = self.routes.lock() {
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64;
             let info = NeighborInfo {
                 addr,
-                last_seen_us: 0, // In a real system, get timestamp
+                last_seen_us: now,
             };
             let _ = routes.insert(did, info);
         }
@@ -60,8 +62,12 @@ impl RoutingTable {
     pub fn gossip_routes(&self) -> Vec<(Did, SocketAddr)> {
         let mut routes = Vec::new();
         if let Ok(r) = self.routes.lock() {
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64;
             for (did, info) in r.iter() {
-                routes.push((*did, info.addr));
+                // Ignore extremely stale routes (> 30 seconds)
+                if now.saturating_sub(info.last_seen_us) < 30_000_000 {
+                    routes.push((*did, info.addr));
+                }
             }
         }
         routes
@@ -86,25 +92,44 @@ impl RoutingTable {
             tokio::spawn(async move {
                 let mut buf = [0u8; 1024];
                 loop {
-                    if let Ok((len, _)) = listen_socket.recv_from(&mut buf).await {
-                        // Very simple parse logic (just for mock)
+                    if let Ok((len, _src_addr)) = listen_socket.recv_from(&mut buf).await {
+                        // Binary format:
+                        // [DID: 32 bytes]
+                        // [IP Type: 1 byte (4 or 6)]
+                        // [IP Bytes: 4 or 16 bytes]
+                        // [Port: 2 bytes]
                         let mut offset = 0;
-                        while offset + 33 <= len {
+                        while offset + 33 < len {
                             let mut did_bytes = [0u8; 32];
                             did_bytes.copy_from_slice(&buf[offset..offset + 32]);
                             offset += 32;
-                            let str_len = buf[offset] as usize;
+                            
+                            let ip_type = buf[offset];
                             offset += 1;
                             
-                            if offset + str_len <= len {
-                                if let Ok(addr_str) = std::str::from_utf8(&buf[offset..offset + str_len]) {
-                                    if let Ok(addr) = addr_str.parse::<std::net::SocketAddr>() {
-                                        table_clone.update_route(Did(did_bytes), addr);
-                                    }
-                                }
-                                offset += str_len;
+                            let addr = if ip_type == 4 && offset + 6 <= len {
+                                let mut ip_bytes = [0u8; 4];
+                                ip_bytes.copy_from_slice(&buf[offset..offset + 4]);
+                                offset += 4;
+                                let port = u16::from_be_bytes([buf[offset], buf[offset + 1]]);
+                                offset += 2;
+                                Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::from(ip_bytes)), port))
+                            } else if ip_type == 6 && offset + 18 <= len {
+                                let mut ip_bytes = [0u8; 16];
+                                ip_bytes.copy_from_slice(&buf[offset..offset + 16]);
+                                offset += 16;
+                                let port = u16::from_be_bytes([buf[offset], buf[offset + 1]]);
+                                offset += 2;
+                                Some(SocketAddr::new(IpAddr::V6(Ipv6Addr::from(ip_bytes)), port))
                             } else {
-                                break;
+                                None
+                            };
+
+                            if let Some(parsed_addr) = addr {
+                                // Do not route to self (optional check here if self DID is known)
+                                table_clone.update_route(Did(did_bytes), parsed_addr);
+                            } else {
+                                break; // Invalid format
                             }
                         }
                     }
@@ -118,15 +143,45 @@ impl RoutingTable {
                 let routes = self.gossip_routes();
                 if routes.is_empty() { continue; }
                 
-                let mut buf = Vec::new();
-                for (did, addr) in routes {
-                    buf.extend_from_slice(&did.0);
-                    let addr_str = addr.to_string();
-                    buf.push(addr_str.len() as u8);
-                    buf.extend_from_slice(addr_str.as_bytes());
+                // Serialize routes into multiple MTU-safe packets.
+                // Each route entry is: [DID: 32] + [IP type: 1] + [IP: 4 or 16] + [Port: 2]
+                // IPv4 entry = 39 bytes, IPv6 entry = 51 bytes.
+                // We target max 1200 bytes per packet (safe for all networks including tunnels).
+                const MAX_PACKET_SIZE: usize = 1200;
+                
+                let mut packet = Vec::with_capacity(MAX_PACKET_SIZE);
+                
+                for (did, addr) in &routes {
+                    let entry_size = match addr.ip() {
+                        IpAddr::V4(_) => 32 + 1 + 4 + 2, // 39 bytes
+                        IpAddr::V6(_) => 32 + 1 + 16 + 2, // 51 bytes
+                    };
+                    
+                    // If adding this entry would exceed the packet limit, send current packet first
+                    if !packet.is_empty() && packet.len() + entry_size > MAX_PACKET_SIZE {
+                        let _ = socket.send_to(&packet, broadcast_addr).await;
+                        packet.clear();
+                    }
+                    
+                    // Serialize the entry
+                    packet.extend_from_slice(&did.0);
+                    match addr.ip() {
+                        IpAddr::V4(ip4) => {
+                            packet.push(4);
+                            packet.extend_from_slice(&ip4.octets());
+                        }
+                        IpAddr::V6(ip6) => {
+                            packet.push(6);
+                            packet.extend_from_slice(&ip6.octets());
+                        }
+                    }
+                    packet.extend_from_slice(&addr.port().to_be_bytes());
                 }
                 
-                let _ = socket.send_to(&buf, broadcast_addr).await;
+                // Send the final (possibly partial) packet
+                if !packet.is_empty() {
+                    let _ = socket.send_to(&packet, broadcast_addr).await;
+                }
             }
         };
             

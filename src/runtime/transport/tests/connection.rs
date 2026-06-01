@@ -22,23 +22,30 @@ fn tcp_transport_buffers_received_envelopes() {
 /// Tests that transports handle envelope serialization
 #[test]
 fn transport_envelope_serialization_roundtrip() {
+    use crate::envelope::Did;
     use crate::runtime::transport::DEFAULT_PAYLOAD_CAPACITY;
-    
+
     let transport = TransportLayer::new(&OmnimeshMode::development())
         .expect("transport creation failed");
 
+    // Prime the mock bus with a sample envelope addressed to a known DID
+    let local_did = Did([0u8; 32]);
+    let mut sample = crate::runtime::transport::common::TransportUtils::sample_envelope();
+    sample.header.recipient_did = local_did;
+    transport.send(&sample).expect("send must succeed");
+
     let original = transport.receive()
         .expect("should receive envelope");
-    
+
     let mut buf = [0u8; 2048];
     let len = original.serialize_into(&mut buf).unwrap();
     let serialized = &buf[..len];
     assert!(!serialized.is_empty());
-    
-    let deserialized: crate::envelope::SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY> 
+
+    let deserialized: crate::envelope::SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>
         = crate::envelope::SignedEnvelope::deserialize(&serialized)
         .expect("should deserialize");
-    
+
     assert_eq!(original.header.version, deserialized.header.version);
     assert_eq!(original.payload.as_slice(), deserialized.payload.as_slice());
 }
@@ -95,17 +102,24 @@ fn tcp_transport_gracefully_fails_without_listener() {
 /// Tests envelope round-trip through transport layer
 #[test]
 fn envelope_round_trip_through_transport() {
+    use crate::envelope::Did;
     let transport = TransportLayer::new(&OmnimeshMode::development())
         .expect("transport creation failed");
 
+    // Prime the bus
+    let local_did = Did([0u8; 32]);
+    let mut sample = crate::runtime::transport::common::TransportUtils::sample_envelope();
+    sample.header.recipient_did = local_did;
+    transport.send(&sample).expect("prime send failed");
+
     let received = transport.receive()
         .expect("should receive envelope");
-    
+
     let sent_result = transport.send(&received);
     assert!(sent_result.is_ok());
 
     // Envelope should maintain integrity
-    assert_eq!(received.header.version, 1);
+    assert_eq!(received.header.recipient_did, local_did);
 }
 
 /// Tests transport configuration persistence

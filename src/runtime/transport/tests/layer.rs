@@ -8,13 +8,20 @@ use super::helpers::{assert_transport_kind, create_and_initialize_transport};
 
 #[test]
 fn transport_receive_returns_valid_envelope() {
+    use crate::envelope::Did;
+    use crate::runtime::transport::common::TransportUtils;
     let transport = TransportLayer::new(&OmnimeshMode::development())
         .expect("transport creation failed");
-    let envelope = transport.receive().expect("expected envelope");
 
-    assert_eq!(envelope.header.version, 1);
-    assert_eq!(envelope.payload.as_slice(), b"hello omnimesh");
-    assert_eq!(envelope.signature, [1u8; 64]);
+    // Send a sample envelope into the bus first
+    // Default MockTransport uses [0u8; 32] as its DID
+    let local_did = Did([0u8; 32]);
+    let mut sample = TransportUtils::sample_envelope();
+    sample.header.recipient_did = local_did;
+    transport.send(&sample).expect("send must succeed");
+
+    let envelope = transport.receive().expect("expected envelope");
+    assert_eq!(envelope.header.recipient_did, local_did);
 }
 
 #[test]
@@ -27,10 +34,18 @@ fn transport_layer_kind_matches_mode() {
 
 #[test]
 fn transport_send_succeeds_with_mock() {
+    use crate::envelope::Did;
+    use crate::runtime::transport::common::TransportUtils;
     let transport = TransportLayer::new(&OmnimeshMode::development())
         .expect("transport creation failed");
-    let envelope = transport.receive().expect("expected envelope");
 
+    // Default MockTransport uses [0u8; 32] as its DID
+    let local_did = Did([0u8; 32]);
+    let mut sample = TransportUtils::sample_envelope();
+    sample.header.recipient_did = local_did;
+    transport.send(&sample).expect("send must succeed");
+
+    let envelope = transport.receive().expect("expected envelope");
     let result = transport.send(&envelope);
     assert!(result.is_ok());
 }

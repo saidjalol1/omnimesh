@@ -145,6 +145,10 @@ fn test_broadcast_to_multiple_nodes() {
     
     thread::sleep(Duration::from_millis(100));
     
+    sender.register_peer(receiver1.did, "127.0.0.1:9201");
+    sender.register_peer(receiver2.did, "127.0.0.1:9202");
+    sender.register_peer(receiver3.did, "127.0.0.1:9203");
+    
     // Sender broadcasts to all receivers
     let message = b"Broadcast message";
     assert!(sender.send_message(&receiver1, 1, message).is_ok());
@@ -183,6 +187,9 @@ fn test_bidirectional_communication() {
     
     thread::sleep(Duration::from_millis(100));
     
+    node_a.register_peer(node_b.did, "127.0.0.1:9301");
+    node_b.register_peer(node_a.did, "127.0.0.1:9300");
+    
     // A -> B
     assert!(node_a.send_message(&node_b, 1, b"Request").is_ok());
     thread::sleep(Duration::from_millis(50));
@@ -212,6 +219,7 @@ fn test_message_ordering() {
     let receiver = Node::new(9401, &mode);
     
     thread::sleep(Duration::from_millis(100));
+    sender.register_peer(receiver.did, "127.0.0.1:9401");
     
     // Send multiple messages in sequence
     for i in 0..5 {
@@ -242,6 +250,7 @@ fn test_duplicate_detection_across_nodes() {
     let receiver = Node::new(9501, &mode);
     
     thread::sleep(Duration::from_millis(100));
+    sender.register_peer(receiver.did, "127.0.0.1:9501");
     
     // Send same message twice
     let message = b"Duplicate test";
@@ -271,6 +280,7 @@ fn test_high_throughput() {
     let receiver = Node::new(9601, &mode);
     
     thread::sleep(Duration::from_millis(100));
+    sender.register_peer(receiver.did, "127.0.0.1:9601");
     
     let message_count = 100;
     let mut sent = 0;

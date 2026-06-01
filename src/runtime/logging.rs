@@ -178,6 +178,7 @@ impl LogEntry {
 }
 
 /// Global logger configuration
+#[derive(Debug)]
 pub struct Logger {
     min_level: LogLevel,
     json_format: bool,

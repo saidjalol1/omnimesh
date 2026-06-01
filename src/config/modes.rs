@@ -31,6 +31,7 @@ pub enum DidRegistryMode {
     OffChain { resolver_url: alloc::string::String, cache_ttl_seconds: u64 },
 }
 
+#[cfg(feature = "std")]
 #[derive(Debug, Clone)]
 pub struct OmniMeshConfig {
     pub node_id: crate::envelope::Did,

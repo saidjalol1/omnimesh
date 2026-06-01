@@ -1,0 +1,14 @@
+C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\deps\pyo3_build_config-7880914fd1221e17.d: C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\lib.rs C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\errors.rs C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\impl_.rs C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\build\pyo3-build-config-5a455c1041198d8c\out/pyo3-build-config-file.txt C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\build\pyo3-build-config-5a455c1041198d8c\out/pyo3-build-config.txt
+
+C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\deps\libpyo3_build_config-7880914fd1221e17.rlib: C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\lib.rs C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\errors.rs C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\impl_.rs C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\build\pyo3-build-config-5a455c1041198d8c\out/pyo3-build-config-file.txt C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\build\pyo3-build-config-5a455c1041198d8c\out/pyo3-build-config.txt
+
+C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\deps\libpyo3_build_config-7880914fd1221e17.rmeta: C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\lib.rs C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\errors.rs C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\impl_.rs C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\build\pyo3-build-config-5a455c1041198d8c\out/pyo3-build-config-file.txt C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\build\pyo3-build-config-5a455c1041198d8c\out/pyo3-build-config.txt
+
+C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\lib.rs:
+C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\errors.rs:
+C:\Users\saidj\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-build-config-0.20.3\src\impl_.rs:
+C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\build\pyo3-build-config-5a455c1041198d8c\out/pyo3-build-config-file.txt:
+C:\Users\saidj\Documents\GitHub\omnimesh\bindings\python\target\release\build\pyo3-build-config-5a455c1041198d8c\out/pyo3-build-config.txt:
+
+# env-dep:CARGO_PKG_VERSION=0.20.3
+# env-dep:OUT_DIR=C:\\Users\\saidj\\Documents\\GitHub\\omnimesh\\bindings\\python\\target\\release\\build\\pyo3-build-config-5a455c1041198d8c\\out

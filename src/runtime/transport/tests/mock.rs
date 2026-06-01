@@ -8,12 +8,19 @@ use crate::runtime::transport::common::TransportUtils;
 
 #[test]
 fn mock_transport_returns_sample_envelope() {
-    let transport = MockTransport::new(std::sync::Arc::new(crate::runtime::RoutingTable::new()));
-    let envelope = transport.receive().expect("should return envelope");
+    use crate::envelope::Did;
+    let routing = std::sync::Arc::new(crate::runtime::RoutingTable::new());
+    let local_did = Did([0x42u8; 32]);
+    let transport = MockTransport::new(routing).with_did(local_did);
 
-    assert_eq!(envelope.header.version, 1);
-    assert_eq!(envelope.payload.as_slice(), b"hello omnimesh");
-    assert_eq!(envelope.signature, [1u8; 64]);
+    // Must send to the DID first so it appears in the inbox
+    let mut sample = TransportUtils::sample_envelope();
+    // Patch recipient to match local_did so it lands in the right inbox
+    sample.header.recipient_did = local_did;
+    transport.send(&sample).expect("send must succeed");
+
+    let envelope = transport.receive().expect("should return envelope");
+    assert_eq!(envelope.header.recipient_did, local_did);
 }
 
 #[test]

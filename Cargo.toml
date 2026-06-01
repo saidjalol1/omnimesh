@@ -1,7 +1,21 @@
 [package]
 name = "omnimesh"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
+authors = ["Saidjalol <saidjalolturakhujayev@gmail.com>"]
+description = "Zero-allocation mesh networking middleware for autonomous robot fleets, edge-AI swarms, and multi-agent systems"
+license = "MIT"
+repository = "https://github.com/saidjalol1/omnimesh"
+homepage = "https://github.com/saidjalol1/omnimesh"
+documentation = "https://docs.rs/omnimesh"
+readme = "README.md"
+keywords = ["robotics", "mesh-networking", "edge-ai", "p2p", "iot"]
+categories = ["network-programming", "embedded", "science::robotics"]
+rust-version = "1.85"
+
+[workspace]
+members = [".", "bindings/python"]
+resolver = "2"
 
 [[bin]]
 name = "omnimesh"
@@ -29,12 +43,15 @@ prost = { version = "0.13", default-features = false, features = ["prost-derive"
 toml = { version = "0.8", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 clap = { version = "4.4", features = ["derive"], optional = true }
-ollama-rs = "0.1.9"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
-serde_json = "1.0"
+ollama-rs = { version = "0.1.9", optional = true }
+reqwest = { version = "0.11", features = ["blocking", "json"], optional = true }
+serde_json = { version = "1.0", optional = true }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 prometheus = { version = "0.13", optional = true }
 lazy_static = { version = "1.4", optional = true }
+core_affinity = { version = "0.8", optional = true }
+thread-priority = { version = "1.1", optional = true }
+ctrlc = { version = "3.4", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -42,6 +59,10 @@ criterion = { version = "0.5", features = ["html_reports"] }
 [[bench]]
 name = "omnimesh_benchmarks"
 harness = false
+
+[[example]]
+name = "ollama_group_chat"
+required-features = ["ollama"]
 
 [features]
 default = ["std"]
@@ -56,10 +77,15 @@ std = [
     "sled",
     "toml",
     "serde/std",
+    "serde_json",
     "clap",
     "ed25519-dalek/std",
     "blake3/std",
     "rand_core/std",
     "prometheus",
-    "lazy_static"
+    "lazy_static",
+    "ctrlc",
+    "core_affinity",
+    "thread-priority"
 ]
+ollama = ["ollama-rs", "reqwest"]

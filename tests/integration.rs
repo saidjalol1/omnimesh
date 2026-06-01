@@ -13,7 +13,7 @@ use omnimesh::runtime::wcet::{WcetGuard, WcetBudget};
 use omnimesh::payload;
 
 use ed25519_dalek::SigningKey;
-use rand_core::OsRng;
+use rand_core::{OsRng, RngCore};
 
 #[test]
 fn end_to_end_sign_verify_deliver_store() {
@@ -26,9 +26,12 @@ fn end_to_end_sign_verify_deliver_store() {
     let sender_did = Did::new(signing_key.verifying_key().to_bytes());
     let recipient_did = Did([0xBB; 32]);
 
+    let mut id_bytes = [0u8; 16];
+    OsRng.fill_bytes(&mut id_bytes);
+
     let header = EnvelopeHeader {
         version: 7,
-        message_id: MessageId([1u8; 16]),
+        message_id: MessageId(id_bytes),
         sender_did,
         recipient_did,
         sequence_number: 0,
@@ -81,8 +84,8 @@ fn end_to_end_sign_verify_deliver_store() {
     let decoded = payload::decode_payload(stored.payload.as_slice()).unwrap();
     match decoded.payload {
         Some(payload::PayloadKind::MotionCommand(cmd)) => {
-            assert_eq!(cmd.linear_x, 1.0);
-            assert_eq!(cmd.angular_z, 0.5);
+            assert_eq!(cmd.linear.as_ref().unwrap().x, 1.0);
+            assert_eq!(cmd.angular.as_ref().unwrap().z, 0.5);
         }
         _ => panic!("Expected MotionCommand payload"),
     }
@@ -130,7 +133,19 @@ fn payload_roundtrip_all_types() {
     let decoded = payload::decode_payload(&bytes).unwrap();
     assert_eq!(sf, decoded);
 
-    println!("=== Payload Roundtrip Test PASSED (all 5 types) ===");
+    // LlmQuery
+    let lq = payload::llm_query("What is 2+2?", "You are a helpful AI.", "llama3:8b");
+    let bytes = payload::encode_payload(&lq);
+    let decoded = payload::decode_payload(&bytes).unwrap();
+    assert_eq!(lq, decoded);
+
+    // LlmResponse
+    let lr = payload::llm_response("It is 4.", 150000);
+    let bytes = payload::encode_payload(&lr);
+    let decoded = payload::decode_payload(&bytes).unwrap();
+    assert_eq!(lr, decoded);
+
+    println!("=== Payload Roundtrip Test PASSED (all 7 types) ===");
 }
 
 #[test]

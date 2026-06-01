@@ -10,9 +10,15 @@ pub mod payload;
 #[cfg(feature = "std")]
 pub mod runtime;
 
+#[cfg(feature = "std")]
+pub mod client;
+
 pub use buffer::{PayloadError, PayloadStorage, SafetyBufferPool};
 pub use config::{CryptoMode, OmnimeshMode, PersistenceMode, WcetMode};
 pub use envelope::{Did, EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
 
 #[cfg(feature = "std")]
 pub use runtime::run;
+
+#[cfg(feature = "std")]
+pub use client::{OmnimeshClient, ClientConfig, ReceivedMessage, ClientHealth};

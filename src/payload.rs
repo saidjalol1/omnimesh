@@ -20,22 +20,25 @@ pub struct AgentCommand {
     pub payload: Vec<u8>,
 }
 
-/// Robot motion commands (twist-style)
+/// ROS 2 geometry_msgs/Vector3 equivalent
+#[derive(Clone, PartialEq, Message)]
+pub struct Vector3 {
+    #[prost(float, tag = "1")]
+    pub x: f32,
+    #[prost(float, tag = "2")]
+    pub y: f32,
+    #[prost(float, tag = "3")]
+    pub z: f32,
+}
+
+/// Robot motion commands (geometry_msgs/Twist equivalent)
 #[derive(Clone, PartialEq, Message)]
 pub struct MotionCommand {
-    #[prost(float, tag = "1")]
-    pub linear_x: f32,
-    #[prost(float, tag = "2")]
-    pub linear_y: f32,
-    #[prost(float, tag = "3")]
-    pub linear_z: f32,
-    #[prost(float, tag = "4")]
-    pub angular_x: f32,
-    #[prost(float, tag = "5")]
-    pub angular_y: f32,
-    #[prost(float, tag = "6")]
-    pub angular_z: f32,
-    #[prost(uint64, tag = "7")]
+    #[prost(message, optional, tag = "1")]
+    pub linear: Option<Vector3>,
+    #[prost(message, optional, tag = "2")]
+    pub angular: Option<Vector3>,
+    #[prost(uint64, tag = "3")]
     pub deadline_ns: u64,
 }
 
@@ -51,6 +54,26 @@ pub struct InferenceResult {
     #[prost(bytes = "vec", tag = "4")]
     pub raw_output: Vec<u8>,
     #[prost(uint64, tag = "5")]
+    pub latency_us: u64,
+}
+
+/// Request for an LLM inference (e.g. edge AI node asking Ollama)
+#[derive(Clone, PartialEq, Message)]
+pub struct LlmQuery {
+    #[prost(string, tag = "1")]
+    pub prompt: String,
+    #[prost(string, tag = "2")]
+    pub system_prompt: String,
+    #[prost(string, tag = "3")]
+    pub model: String,
+}
+
+/// Response from an LLM inference
+#[derive(Clone, PartialEq, Message)]
+pub struct LlmResponse {
+    #[prost(string, tag = "1")]
+    pub response: String,
+    #[prost(uint64, tag = "2")]
     pub latency_us: u64,
 }
 
@@ -72,7 +95,7 @@ pub struct Heartbeat {
 /// Envelope payload wrapper with oneof semantics
 #[derive(Clone, PartialEq, Message)]
 pub struct EnvelopePayload {
-    #[prost(oneof = "PayloadKind", tags = "1, 2, 3, 4, 5, 6")]
+    #[prost(oneof = "PayloadKind", tags = "1, 2, 3, 4, 5, 6, 7, 8")]
     pub payload: Option<PayloadKind>,
 }
 
@@ -89,7 +112,7 @@ pub struct ModelWeights {
     pub original_size: u64,
 }
 
-/// Bounding box for object detection
+/// Bounding box for object detection (vision_msgs/BoundingBox2D equivalent)
 #[derive(Clone, PartialEq, Message)]
 pub struct BoundingBox {
     #[prost(float, tag = "1")]
@@ -102,7 +125,7 @@ pub struct BoundingBox {
     pub y_max: f32,
 }
 
-/// Single detection from an inference pipeline
+/// Single detection from an inference pipeline (vision_msgs/Detection2D equivalent)
 #[derive(Clone, PartialEq, Message)]
 pub struct Detection {
     #[prost(string, tag = "1")]
@@ -115,7 +138,7 @@ pub struct Detection {
     pub timestamp_us: u64,
 }
 
-/// 3D transform (position + orientation)
+/// 3D transform (geometry_msgs/Transform equivalent)
 #[derive(Clone, PartialEq, Message)]
 pub struct Transform {
     #[prost(float, tag = "1")]
@@ -135,6 +158,7 @@ pub struct Transform {
 }
 
 /// Sensor fusion frame combining multiple sensor modalities
+/// Maps well to a combined PointCloud2 and Image structure
 #[derive(Clone, PartialEq, Message)]
 pub struct SensorFusionFrame {
     #[prost(string, tag = "1")]
@@ -144,9 +168,9 @@ pub struct SensorFusionFrame {
     #[prost(message, repeated, tag = "3")]
     pub detections: Vec<Detection>,
     #[prost(bytes = "vec", tag = "4")]
-    pub lidar_points: Vec<u8>,
+    pub point_cloud_data: Vec<u8>,
     #[prost(bytes = "vec", tag = "5")]
-    pub camera_frame: Vec<u8>,
+    pub image_data: Vec<u8>,
     #[prost(message, optional, tag = "6")]
     pub pose: Option<Transform>,
 }
@@ -166,6 +190,10 @@ pub enum PayloadKind {
     ModelWeights(ModelWeights),
     #[prost(message, tag = "6")]
     SensorFusion(SensorFusionFrame),
+    #[prost(message, tag = "7")]
+    LlmQuery(LlmQuery),
+    #[prost(message, tag = "8")]
+    LlmResponse(LlmResponse),
 }
 
 /// Error types for payload operations
@@ -204,12 +232,8 @@ pub fn agent_command(command_type: &str, target_did: &[u8], data: &[u8]) -> Enve
 pub fn motion_command(lx: f32, ly: f32, lz: f32, ax: f32, ay: f32, az: f32, deadline_ns: u64) -> EnvelopePayload {
     EnvelopePayload {
         payload: Some(PayloadKind::MotionCommand(MotionCommand {
-            linear_x: lx,
-            linear_y: ly,
-            linear_z: lz,
-            angular_x: ax,
-            angular_y: ay,
-            angular_z: az,
+            linear: Some(Vector3 { x: lx, y: ly, z: lz }),
+            angular: Some(Vector3 { x: ax, y: ay, z: az }),
             deadline_ns,
         })),
     }
@@ -247,10 +271,30 @@ pub fn sensor_fusion(frame_id: &str, timestamp_us: u64, detections: Vec<Detectio
             frame_id: frame_id.into(),
             timestamp_us,
             detections,
-            lidar_points: Vec::new(),
-            camera_frame: Vec::new(),
+            point_cloud_data: Vec::new(),
+            image_data: Vec::new(),
             pose,
         })),
     }
 }
 
+/// Helper: create an LlmQuery payload
+pub fn llm_query(prompt: &str, system_prompt: &str, model: &str) -> EnvelopePayload {
+    EnvelopePayload {
+        payload: Some(PayloadKind::LlmQuery(LlmQuery {
+            prompt: prompt.into(),
+            system_prompt: system_prompt.into(),
+            model: model.into(),
+        })),
+    }
+}
+
+/// Helper: create an LlmResponse payload
+pub fn llm_response(response: &str, latency_us: u64) -> EnvelopePayload {
+    EnvelopePayload {
+        payload: Some(PayloadKind::LlmResponse(LlmResponse {
+            response: response.into(),
+            latency_us,
+        })),
+    }
+}
