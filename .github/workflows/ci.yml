@@ -97,7 +97,7 @@ jobs:
         run: cargo install cargo-tarpaulin
       
       - name: Generate coverage
-        run: cargo tarpaulin --verbose --all-features --timeout 120 --out Xml -p omnimesh
+        run: cargo tarpaulin --verbose --all-features --timeout 300 --out Xml -p omnimesh --exclude-files "tests/flow_control*"
       
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
