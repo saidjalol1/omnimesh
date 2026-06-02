@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "omnimesh"
-version = "1.0.0"
+version = "1.0.1"
 description = "Zero-allocation mesh networking middleware for autonomous robot fleets, edge-AI swarms, and multi-agent systems"
 readme = "README.md"
 license = {text = "MIT"}
