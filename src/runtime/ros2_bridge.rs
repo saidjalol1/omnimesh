@@ -69,7 +69,7 @@ impl Default for Ros2BridgeConfig {
 /// ROS 2 standard message types serialized as JSON for bridge communication.
 /// These mirror the official ROS 2 message definitions.
 pub mod ros2_msgs {
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
 
     /// geometry_msgs/msg/Vector3
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,13 +167,33 @@ pub mod ros2_msgs {
 pub fn to_ros2(payload: &EnvelopePayload) -> Option<ros2_msgs::BridgeMessage> {
     match payload.payload.as_ref()? {
         PayloadKind::MotionCommand(cmd) => {
-            let linear = cmd.linear.as_ref().map(|v| ros2_msgs::Vector3 {
-                x: v.x as f64, y: v.y as f64, z: v.z as f64,
-            }).unwrap_or(ros2_msgs::Vector3 { x: 0.0, y: 0.0, z: 0.0 });
+            let linear = cmd
+                .linear
+                .as_ref()
+                .map(|v| ros2_msgs::Vector3 {
+                    x: v.x as f64,
+                    y: v.y as f64,
+                    z: v.z as f64,
+                })
+                .unwrap_or(ros2_msgs::Vector3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                });
 
-            let angular = cmd.angular.as_ref().map(|v| ros2_msgs::Vector3 {
-                x: v.x as f64, y: v.y as f64, z: v.z as f64,
-            }).unwrap_or(ros2_msgs::Vector3 { x: 0.0, y: 0.0, z: 0.0 });
+            let angular = cmd
+                .angular
+                .as_ref()
+                .map(|v| ros2_msgs::Vector3 {
+                    x: v.x as f64,
+                    y: v.y as f64,
+                    z: v.z as f64,
+                })
+                .unwrap_or(ros2_msgs::Vector3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                });
 
             let twist = ros2_msgs::Twist { linear, angular };
             Some(ros2_msgs::BridgeMessage {
@@ -187,13 +207,28 @@ pub fn to_ros2(payload: &EnvelopePayload) -> Option<ros2_msgs::BridgeMessage> {
             let status = ros2_msgs::DiagnosticStatus {
                 level: 0, // OK
                 name: "omnimesh_node".to_string(),
-                message: format!("uptime={}ms cpu={}% mem={}KB", hb.uptime_ms, hb.cpu_usage, hb.mem_usage_kb),
+                message: format!(
+                    "uptime={}ms cpu={}% mem={}KB",
+                    hb.uptime_ms, hb.cpu_usage, hb.mem_usage_kb
+                ),
                 hardware_id: hex::encode(&hb.sender_did),
                 values: vec![
-                    ros2_msgs::KeyValue { key: "uptime_ms".into(), value: hb.uptime_ms.to_string() },
-                    ros2_msgs::KeyValue { key: "cpu_usage".into(), value: hb.cpu_usage.to_string() },
-                    ros2_msgs::KeyValue { key: "mem_usage_kb".into(), value: hb.mem_usage_kb.to_string() },
-                    ros2_msgs::KeyValue { key: "epoch".into(), value: hb.epoch.to_string() },
+                    ros2_msgs::KeyValue {
+                        key: "uptime_ms".into(),
+                        value: hb.uptime_ms.to_string(),
+                    },
+                    ros2_msgs::KeyValue {
+                        key: "cpu_usage".into(),
+                        value: hb.cpu_usage.to_string(),
+                    },
+                    ros2_msgs::KeyValue {
+                        key: "mem_usage_kb".into(),
+                        value: hb.mem_usage_kb.to_string(),
+                    },
+                    ros2_msgs::KeyValue {
+                        key: "epoch".into(),
+                        value: hb.epoch.to_string(),
+                    },
                 ],
             };
             Some(ros2_msgs::BridgeMessage {
@@ -204,29 +239,43 @@ pub fn to_ros2(payload: &EnvelopePayload) -> Option<ros2_msgs::BridgeMessage> {
         }
 
         PayloadKind::SensorFusion(sf) => {
-            let detections: Vec<ros2_msgs::Detection2D> = sf.detections.iter().map(|d| {
-                let bbox = d.bbox.as_ref().map(|b| ros2_msgs::BoundingBox2D {
-                    center_x: ((b.x_min + b.x_max) / 2.0) as f64,
-                    center_y: ((b.y_min + b.y_max) / 2.0) as f64,
-                    size_x: (b.x_max - b.x_min) as f64,
-                    size_y: (b.y_max - b.y_min) as f64,
-                }).unwrap_or(ros2_msgs::BoundingBox2D {
-                    center_x: 0.0, center_y: 0.0, size_x: 0.0, size_y: 0.0,
-                });
+            let detections: Vec<ros2_msgs::Detection2D> = sf
+                .detections
+                .iter()
+                .map(|d| {
+                    let bbox = d
+                        .bbox
+                        .as_ref()
+                        .map(|b| ros2_msgs::BoundingBox2D {
+                            center_x: ((b.x_min + b.x_max) / 2.0) as f64,
+                            center_y: ((b.y_min + b.y_max) / 2.0) as f64,
+                            size_x: (b.x_max - b.x_min) as f64,
+                            size_y: (b.y_max - b.y_min) as f64,
+                        })
+                        .unwrap_or(ros2_msgs::BoundingBox2D {
+                            center_x: 0.0,
+                            center_y: 0.0,
+                            size_x: 0.0,
+                            size_y: 0.0,
+                        });
 
-                let timestamp_sec = (sf.timestamp_us / 1_000_000) as i32;
-                let timestamp_nsec = ((sf.timestamp_us % 1_000_000) * 1000) as u32;
+                    let timestamp_sec = (sf.timestamp_us / 1_000_000) as i32;
+                    let timestamp_nsec = ((sf.timestamp_us % 1_000_000) * 1000) as u32;
 
-                ros2_msgs::Detection2D {
-                    header: ros2_msgs::Header {
-                        stamp: ros2_msgs::TimeStamp { sec: timestamp_sec, nanosec: timestamp_nsec },
-                        frame_id: sf.frame_id.clone(),
-                    },
-                    id: d.class.clone(),
-                    bbox,
-                    score: d.confidence as f64,
-                }
-            }).collect();
+                    ros2_msgs::Detection2D {
+                        header: ros2_msgs::Header {
+                            stamp: ros2_msgs::TimeStamp {
+                                sec: timestamp_sec,
+                                nanosec: timestamp_nsec,
+                            },
+                            frame_id: sf.frame_id.clone(),
+                        },
+                        id: d.class.clone(),
+                        bbox,
+                        score: d.confidence as f64,
+                    }
+                })
+                .collect();
 
             Some(ros2_msgs::BridgeMessage {
                 msg_type: "vision_msgs/msg/Detection2DArray".to_string(),
@@ -262,20 +311,29 @@ pub fn from_ros2(msg: &ros2_msgs::BridgeMessage) -> Option<EnvelopePayload> {
         }
 
         "diagnostic_msgs/msg/DiagnosticStatus" => {
-            let status: ros2_msgs::DiagnosticStatus = serde_json::from_value(msg.data.clone()).ok()?;
-            let uptime_ms = status.values.iter()
+            let status: ros2_msgs::DiagnosticStatus =
+                serde_json::from_value(msg.data.clone()).ok()?;
+            let uptime_ms = status
+                .values
+                .iter()
                 .find(|kv| kv.key == "uptime_ms")
                 .and_then(|kv| kv.value.parse::<u64>().ok())
                 .unwrap_or(0);
-            let cpu = status.values.iter()
+            let cpu = status
+                .values
+                .iter()
                 .find(|kv| kv.key == "cpu_usage")
                 .and_then(|kv| kv.value.parse::<u32>().ok())
                 .unwrap_or(0);
-            let mem_kb = status.values.iter()
+            let mem_kb = status
+                .values
+                .iter()
                 .find(|kv| kv.key == "mem_usage_kb")
                 .and_then(|kv| kv.value.parse::<u32>().ok())
                 .unwrap_or(0);
-            let epoch = status.values.iter()
+            let epoch = status
+                .values
+                .iter()
                 .find(|kv| kv.key == "epoch")
                 .and_then(|kv| kv.value.parse::<u64>().ok())
                 .unwrap_or(0);
@@ -338,7 +396,8 @@ impl Ros2Bridge {
     ///
     /// This must be called from within a Tokio runtime.
     pub async fn start(self) -> Result<(), String> {
-        let socket = UdpSocket::bind(self.config.listen_addr).await
+        let socket = UdpSocket::bind(self.config.listen_addr)
+            .await
             .map_err(|e| format!("Failed to bind ROS 2 bridge socket: {}", e))?;
 
         let socket = Arc::new(socket);
@@ -449,8 +508,18 @@ mod tests {
 
         let status: ros2_msgs::DiagnosticStatus = serde_json::from_value(bridge_msg.data).unwrap();
         assert_eq!(status.level, 0);
-        assert!(status.values.iter().any(|kv| kv.key == "cpu_usage" && kv.value == "75"));
-        assert!(status.values.iter().any(|kv| kv.key == "mem_usage_kb" && kv.value == "4096"));
+        assert!(
+            status
+                .values
+                .iter()
+                .any(|kv| kv.key == "cpu_usage" && kv.value == "75")
+        );
+        assert!(
+            status
+                .values
+                .iter()
+                .any(|kv| kv.key == "mem_usage_kb" && kv.value == "4096")
+        );
     }
 
     #[test]
@@ -486,14 +555,17 @@ mod tests {
 
     #[test]
     fn test_sensor_fusion_to_ros2_detections() {
-        let detections = vec![
-            Detection {
-                class: "person".into(),
-                confidence: 0.95,
-                bbox: Some(BoundingBox { x_min: 10.0, y_min: 20.0, x_max: 100.0, y_max: 200.0 }),
-                timestamp_us: 1_700_000_000,
-            },
-        ];
+        let detections = vec![Detection {
+            class: "person".into(),
+            confidence: 0.95,
+            bbox: Some(BoundingBox {
+                x_min: 10.0,
+                y_min: 20.0,
+                x_max: 100.0,
+                y_max: 200.0,
+            }),
+            timestamp_us: 1_700_000_000,
+        }];
         let payload = sensor_fusion("camera_front", 1_700_000_000, detections, None);
         let bridge_msg = to_ros2(&payload).expect("Should convert to ROS 2");
 
@@ -504,7 +576,10 @@ mod tests {
     #[test]
     fn test_unsupported_payload_returns_none() {
         let payload = llm_query("hello", "system", "llama3");
-        assert!(to_ros2(&payload).is_none(), "LLM queries have no ROS 2 equivalent");
+        assert!(
+            to_ros2(&payload).is_none(),
+            "LLM queries have no ROS 2 equivalent"
+        );
     }
 
     #[test]

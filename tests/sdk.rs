@@ -4,7 +4,7 @@
 //! and receive strongly-typed messages across the mesh network without any
 //! knowledge of the underlying cryptography or transport layers.
 
-use omnimesh::client::{OmnimeshClient, ClientConfig};
+use omnimesh::client::{ClientConfig, OmnimeshClient};
 use omnimesh::config::OmnimeshMode;
 use omnimesh::payload::{self, PayloadKind};
 use std::time::Duration;
@@ -53,7 +53,10 @@ fn sdk_motion_command_roundtrip() {
 
     // Robot polls for a message — it should see the MotionCommand
     let msg = robot.receive_timeout(Duration::from_millis(200));
-    assert!(msg.is_some(), "Robot should receive a message from controller");
+    assert!(
+        msg.is_some(),
+        "Robot should receive a message from controller"
+    );
 
     let msg = msg.unwrap();
     assert_eq!(msg.sender, controller.did);
@@ -94,7 +97,10 @@ fn sdk_heartbeat_roundtrip() {
             assert_eq!(h.cpu_usage, 42);
             assert_eq!(h.mem_usage_kb, 1024);
             assert_eq!(h.epoch, 7);
-            println!("✓ Received Heartbeat: uptime={}ms, cpu={}%, mem={}KB", h.uptime_ms, h.cpu_usage, h.mem_usage_kb);
+            println!(
+                "✓ Received Heartbeat: uptime={}ms, cpu={}%, mem={}KB",
+                h.uptime_ms, h.cpu_usage, h.mem_usage_kb
+            );
         }
         other => panic!("Expected Heartbeat, got {:?}", other),
     }
@@ -118,7 +124,9 @@ fn sdk_llm_query_roundtrip() {
         "You are a fleet management AI.",
         "llama3:8b",
     );
-    edge_node.send(ai_node.did, query).expect("LlmQuery send failed");
+    edge_node
+        .send(ai_node.did, query)
+        .expect("LlmQuery send failed");
 
     let msg = ai_node.receive_timeout(Duration::from_millis(200));
     assert!(msg.is_some(), "AI node should receive LlmQuery");
@@ -128,7 +136,10 @@ fn sdk_llm_query_roundtrip() {
         Some(PayloadKind::LlmQuery(q)) => {
             assert!(q.prompt.contains("battery level"));
             assert_eq!(q.model, "llama3:8b");
-            println!("✓ AI node received LlmQuery: prompt=\"{}\" model={}", q.prompt, q.model);
+            println!(
+                "✓ AI node received LlmQuery: prompt=\"{}\" model={}",
+                q.prompt, q.model
+            );
         }
         other => panic!("Expected LlmQuery, got {:?}", other),
     }
@@ -183,7 +194,9 @@ fn sdk_register_peer_shows_in_known_peers() {
         .unwrap();
 
     let fake_did = omnimesh::Did([0xAB; 32]);
-    client.register_peer(fake_did, "127.0.0.1:7777").expect("register_peer failed");
+    client
+        .register_peer(fake_did, "127.0.0.1:7777")
+        .expect("register_peer failed");
 
     let peers = client.known_peers();
     assert!(

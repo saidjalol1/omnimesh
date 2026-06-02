@@ -31,8 +31,7 @@ fn certificate_pair_validity_check() {
 #[test]
 fn certificate_generation_creates_valid_cert() {
     let config = CertificateConfig::default();
-    let cert = CertificatePair::generate_self_signed(config)
-        .expect("should generate certificate");
+    let cert = CertificatePair::generate_self_signed(config).expect("should generate certificate");
 
     assert!(cert.is_valid());
     assert!(!cert.cert_der().is_empty());
@@ -42,8 +41,7 @@ fn certificate_generation_creates_valid_cert() {
 #[test]
 fn generated_certificate_has_proper_der_format() {
     let config = CertificateConfig::default();
-    let cert = CertificatePair::generate_self_signed(config)
-        .expect("should generate certificate");
+    let cert = CertificatePair::generate_self_signed(config).expect("should generate certificate");
 
     // DER format starts with SEQUENCE tag (0x30)
     assert_eq!(cert.cert_der()[0], 0x30);

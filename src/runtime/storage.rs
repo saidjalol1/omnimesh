@@ -2,8 +2,8 @@ use crate::config::OmnimeshMode;
 use crate::config::modes::layer_kinds;
 use crate::envelope::SignedEnvelope;
 use crate::runtime::RuntimeLayer;
-use std::sync::Arc;
 use sled::Db;
+use std::sync::Arc;
 
 use crate::runtime::transport::interface::DEFAULT_PAYLOAD_CAPACITY;
 
@@ -24,11 +24,18 @@ impl DtnStore {
         Ok(DtnStore { db: Arc::new(db) })
     }
 
-    pub fn store_envelope<const N: usize>(&self, envelope: &SignedEnvelope<N>) -> Result<(), String> {
+    pub fn store_envelope<const N: usize>(
+        &self,
+        envelope: &SignedEnvelope<N>,
+    ) -> Result<(), String> {
         let key = envelope.header.message_id.0;
         let mut buf = [0u8; 2048];
-        let len = envelope.serialize_into(&mut buf).map_err(|e| format!("{:?}", e))?;
-        self.db.insert(key, &buf[..len]).map_err(|e| e.to_string())?;
+        let len = envelope
+            .serialize_into(&mut buf)
+            .map_err(|e| format!("{:?}", e))?;
+        self.db
+            .insert(key, &buf[..len])
+            .map_err(|e| e.to_string())?;
         self.db.flush().map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -46,7 +53,8 @@ impl DtnStore {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        self.db.insert(key.as_bytes(), &timestamp.to_le_bytes())
+        self.db
+            .insert(key.as_bytes(), &timestamp.to_le_bytes())
             .map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -57,17 +65,17 @@ impl DtnStore {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let mut removed = 0;
         let prefix = b"seen:";
-        
+
         for item in self.db.scan_prefix(prefix) {
             if let Ok((key, val)) = item {
                 if val.len() >= 8 {
                     let mut bytes = [0u8; 8];
                     bytes.copy_from_slice(&val[..8]);
                     let timestamp = u64::from_le_bytes(bytes);
-                    
+
                     if now - timestamp > retention_seconds {
                         self.db.remove(key).map_err(|e| e.to_string())?;
                         removed += 1;
@@ -75,21 +83,27 @@ impl DtnStore {
                 }
             }
         }
-        
+
         if removed > 0 {
             self.db.flush().map_err(|e| e.to_string())?;
         }
-        
+
         Ok(removed)
     }
 
     /// Stores a message specifically for DTN mule routing
-    pub fn store_for_mule<const N: usize>(&self, envelope: &SignedEnvelope<N>) -> Result<(), String> {
+    pub fn store_for_mule<const N: usize>(
+        &self,
+        envelope: &SignedEnvelope<N>,
+    ) -> Result<(), String> {
         self.store_envelope(envelope)
     }
 
     /// Retrieves all stored messages destined for the given recipient
-    pub fn retrieve_for_recipient<const N: usize>(&self, recipient: &crate::envelope::Did) -> Vec<SignedEnvelope<N>> {
+    pub fn retrieve_for_recipient<const N: usize>(
+        &self,
+        recipient: &crate::envelope::Did,
+    ) -> Vec<SignedEnvelope<N>> {
         let mut envelopes = Vec::new();
         let mut keys_to_remove = Vec::new();
 
@@ -130,9 +144,10 @@ impl StorageLayer {
             OmnimeshMode::Lightweight(_) => layer_kinds::EPHEMERAL_STORAGE,
             OmnimeshMode::Production(cfg) => {
                 if cfg.dtn_enabled
-                    && let Some(path) = &cfg.dtn_path {
-                        dtn = DtnStore::new(path).ok();
-                    }
+                    && let Some(path) = &cfg.dtn_path
+                {
+                    dtn = DtnStore::new(path).ok();
+                }
                 layer_kinds::PERSISTENT_STORAGE
             }
         };
@@ -144,14 +159,17 @@ impl StorageLayer {
         }
     }
 
-    pub fn store(&mut self, envelope: SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>) -> Result<(), String> {
+    pub fn store(
+        &mut self,
+        envelope: SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>,
+    ) -> Result<(), String> {
         println!("Storing envelope in {}", self.kind);
-        
+
         if let Some(dtn) = &self.dtn {
             dtn.store_envelope(&envelope)?;
             println!("Envelope stored persistently in RocksDB DTN.");
         }
-        
+
         self.stored.push(envelope);
         Ok(())
     }
@@ -160,12 +178,10 @@ impl StorageLayer {
         self.stored.len()
     }
 
-    pub fn last_stored(
-        &self,
-    ) -> Option<&SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>> {
+    pub fn last_stored(&self) -> Option<&SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>> {
         self.stored.last()
     }
-    
+
     pub fn dtn_store(&self) -> Option<&DtnStore> {
         self.dtn.as_ref()
     }

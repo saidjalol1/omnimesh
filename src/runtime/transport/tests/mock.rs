@@ -2,9 +2,9 @@
 
 #![allow(unused_imports)]
 
-use crate::runtime::transport::mock::MockTransport;
-use crate::runtime::transport::interface::Transport;
 use crate::runtime::transport::common::TransportUtils;
+use crate::runtime::transport::interface::Transport;
+use crate::runtime::transport::mock::MockTransport;
 
 #[test]
 fn mock_transport_returns_sample_envelope() {

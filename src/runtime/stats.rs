@@ -3,7 +3,7 @@
 //! Provides real-time counters for messages, errors, and performance metrics.
 //! Thread-safe via atomic operations — no locks in the hot path.
 
-use core::sync::atomic::{AtomicU64, AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// Runtime statistics counters. All fields are atomic for lock-free access.
 #[derive(Debug)]
@@ -47,7 +47,8 @@ impl RuntimeStats {
     }
 
     pub fn record_delivered(&self) {
-        self.total_messages_delivered.fetch_add(1, Ordering::Relaxed);
+        self.total_messages_delivered
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn record_duplicate(&self) {
@@ -55,8 +56,10 @@ impl RuntimeStats {
     }
 
     pub fn record_buffered(&self) {
-        self.total_out_of_order_buffered.fetch_add(1, Ordering::Relaxed);
-        self.current_pending_messages.fetch_add(1, Ordering::Relaxed);
+        self.total_out_of_order_buffered
+            .fetch_add(1, Ordering::Relaxed);
+        self.current_pending_messages
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn record_stale(&self) {
@@ -68,15 +71,18 @@ impl RuntimeStats {
     }
 
     pub fn record_signature_fail(&self) {
-        self.total_dropped_signature_fail.fetch_add(1, Ordering::Relaxed);
+        self.total_dropped_signature_fail
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn record_wcet_violation(&self, elapsed_us: u64) {
-        self.last_wcet_violation_us.store(elapsed_us, Ordering::Relaxed);
+        self.last_wcet_violation_us
+            .store(elapsed_us, Ordering::Relaxed);
     }
 
     pub fn record_pending_drained(&self, count: u64) {
-        self.current_pending_messages.fetch_sub(count, Ordering::Relaxed);
+        self.current_pending_messages
+            .fetch_sub(count, Ordering::Relaxed);
     }
 
     /// Returns a snapshot of all stats for logging/monitoring.

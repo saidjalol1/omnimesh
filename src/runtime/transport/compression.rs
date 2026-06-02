@@ -1,3 +1,4 @@
+use crate::runtime::transport::common::errors;
 /// Message compression utilities for transport layer.
 ///
 /// This module provides optional compression support for envelopes,
@@ -5,7 +6,6 @@
 /// during send and automatically decompressed on receive.
 use flate2::Compression;
 use std::io::{Read, Write};
-use crate::runtime::transport::common::errors;
 
 /// Compression settings for the transport layer
 #[derive(Debug, Clone, Copy)]
@@ -22,7 +22,7 @@ impl Default for CompressionConfig {
     fn default() -> Self {
         CompressionConfig {
             enabled: true,
-            level: 6, // Default gzip compression level
+            level: 6,      // Default gzip compression level
             min_size: 128, // Only compress payloads > 128 bytes
         }
     }
@@ -154,7 +154,10 @@ mod tests {
         let config = CompressionConfig::default();
 
         let compressed = compress(&original, config).expect("should compress");
-        assert!(compressed.len() < original.len(), "compressed should be smaller");
+        assert!(
+            compressed.len() < original.len(),
+            "compressed should be smaller"
+        );
 
         let decompressed = decompress(&compressed).expect("should decompress");
         assert_eq!(decompressed, original);

@@ -1,12 +1,12 @@
 use crate::config::OmnimeshMode;
+use crate::envelope::Did;
+use crate::runtime::RuntimeLayer;
+use crate::runtime::RuntimeStats;
 use crate::runtime::delivery::DeliveryLayer;
+use crate::runtime::logging::{LogEntry, LogLevel, Logger};
 use crate::runtime::security::SecurityLayer;
 use crate::runtime::storage::StorageLayer;
 use crate::runtime::transport::TransportLayer;
-use crate::runtime::RuntimeLayer;
-use crate::runtime::RuntimeStats;
-use crate::runtime::logging::{Logger, LogEntry, LogLevel};
-use crate::envelope::Did;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -71,13 +71,18 @@ impl Runtime {
         let shutdown_flag = self.shutdown.clone();
         let _ = ctrlc_shutdown(shutdown_flag.clone());
 
-        self.logger.log(LogEntry::new(LogLevel::Info, "OMNI-MESH V7 Runtime Daemon starting")
-            .with_operation("bootstrap"));
+        self.logger.log(
+            LogEntry::new(LogLevel::Info, "OMNI-MESH V7 Runtime Daemon starting")
+                .with_operation("bootstrap"),
+        );
 
         println!("╔══════════════════════════════════════════════╗");
         println!("║        OMNI-MESH V7 Runtime Daemon          ║");
         println!("╠══════════════════════════════════════════════╣");
-        println!("║  Node DID  : {:<31} ║", hex::encode(&self.self_did.0[..4]));
+        println!(
+            "║  Node DID  : {:<31} ║",
+            hex::encode(&self.self_did.0[..4])
+        );
         println!("║  Transport : {:<31} ║", self.transport.kind());
         println!("║  Security  : {:<31} ║", self.security.kind());
         println!("║  Storage   : {:<31} ║", self.storage.kind());
@@ -98,43 +103,62 @@ impl Runtime {
                             if envelope.header.recipient_did == self.self_did {
                                 // Delivered to self
                                 if let Err(e) = self.storage.store(envelope) {
-                                    self.logger.log(LogEntry::new(LogLevel::Error, "Storage failed")
-                                        .with_operation("store")
-                                        .with_error(e));
+                                    self.logger.log(
+                                        LogEntry::new(LogLevel::Error, "Storage failed")
+                                            .with_operation("store")
+                                            .with_error(e),
+                                    );
                                     continue;
                                 }
 
                                 if let Some(last) = self.storage.last_stored() {
                                     if let Err(e) = self.delivery.deliver(last) {
-                                        self.logger.log(LogEntry::new(LogLevel::Error, "Delivery failed")
-                                            .with_operation("deliver")
-                                            .with_error(e));
+                                        self.logger.log(
+                                            LogEntry::new(LogLevel::Error, "Delivery failed")
+                                                .with_operation("deliver")
+                                                .with_error(e),
+                                        );
                                     } else {
                                         self.stats.record_delivered();
                                         let snap = self.stats.snapshot();
-                                        self.logger.log(LogEntry::new(LogLevel::Info, "Envelope delivered locally")
+                                        self.logger.log(
+                                            LogEntry::new(
+                                                LogLevel::Info,
+                                                "Envelope delivered locally",
+                                            )
                                             .with_operation("deliver")
-                                            .with_message_id(hex::encode(envelope.header.message_id.0)));
+                                            .with_message_id(hex::encode(
+                                                envelope.header.message_id.0,
+                                            )),
+                                        );
                                         let _ = snap; // used for structured log above
                                     }
                                 }
                             } else {
                                 // Forwarding to neighbor
-                                self.logger.log(LogEntry::new(LogLevel::Info, "Forwarding message")
-                                    .with_operation("route")
-                                    .with_recipient(hex::encode(&envelope.header.recipient_did.0[..4])));
-                                if let Err(e) = self.transport.send(&envelope) {
-                                    self.logger.log(LogEntry::new(LogLevel::Error, "Forward failed")
+                                self.logger.log(
+                                    LogEntry::new(LogLevel::Info, "Forwarding message")
                                         .with_operation("route")
-                                        .with_error(e));
+                                        .with_recipient(hex::encode(
+                                            &envelope.header.recipient_did.0[..4],
+                                        )),
+                                );
+                                if let Err(e) = self.transport.send(&envelope) {
+                                    self.logger.log(
+                                        LogEntry::new(LogLevel::Error, "Forward failed")
+                                            .with_operation("route")
+                                            .with_error(e),
+                                    );
                                 }
                             }
                         }
                         Err(e) => {
                             self.stats.record_signature_fail();
-                            self.logger.log(LogEntry::new(LogLevel::Warn, "Envelope rejected")
-                                .with_operation("verify")
-                                .with_error(e));
+                            self.logger.log(
+                                LogEntry::new(LogLevel::Warn, "Envelope rejected")
+                                    .with_operation("verify")
+                                    .with_error(e),
+                            );
                         }
                     }
                 }
@@ -147,12 +171,16 @@ impl Runtime {
 
         // Graceful shutdown
         let snap = self.stats.snapshot();
-        self.logger.log(LogEntry::new(LogLevel::Info, "Daemon shutting down gracefully")
-            .with_operation("shutdown"));
-        println!("\nShutdown complete. Stats: received={}, delivered={}, rejected={}",
+        self.logger.log(
+            LogEntry::new(LogLevel::Info, "Daemon shutting down gracefully")
+                .with_operation("shutdown"),
+        );
+        println!(
+            "\nShutdown complete. Stats: received={}, delivered={}, rejected={}",
             snap.total_messages_received,
             snap.total_messages_delivered,
-            snap.total_dropped_signature_fail);
+            snap.total_dropped_signature_fail
+        );
 
         Ok(())
     }
@@ -168,5 +196,6 @@ fn ctrlc_shutdown(flag: Arc<AtomicBool>) -> Result<(), String> {
     ctrlc::set_handler(move || {
         eprintln!("\nReceived shutdown signal (Ctrl+C). Shutting down...");
         flag.store(true, Ordering::SeqCst);
-    }).map_err(|e| format!("Failed to set Ctrl+C handler: {}", e))
+    })
+    .map_err(|e| format!("Failed to set Ctrl+C handler: {}", e))
 }

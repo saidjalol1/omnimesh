@@ -141,7 +141,10 @@ pub fn init_realtime_thread(core_id: Option<usize>) {
                 eprintln!("WCET WARNING: Failed to pin thread to CPU core {}", id);
             }
         } else {
-            eprintln!("WCET WARNING: Requested core ID {} exceeds available cores", id);
+            eprintln!(
+                "WCET WARNING: Requested core ID {} exceeds available cores",
+                id
+            );
         }
     }
 

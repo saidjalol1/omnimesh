@@ -1,17 +1,17 @@
+use ed25519_dalek::SigningKey;
 use omnimesh::buffer::PayloadStorage;
 use omnimesh::config::OmnimeshMode;
-use omnimesh::envelope::{EnvelopeHeader, MessageId, Did, PayloadType, Priority, SignedEnvelope};
+use omnimesh::envelope::{Did, EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
 use omnimesh::runtime::security::SecurityLayer;
-use ed25519_dalek::SigningKey;
 use rand_core::OsRng;
 
 #[test]
 fn security_verify_accepts_signed_envelope() {
     let security = SecurityLayer::new(&OmnimeshMode::production(), None);
-    
+
     let mut csprng = OsRng;
     let keypair = SigningKey::generate(&mut csprng);
-    
+
     let header = EnvelopeHeader::new(
         1,
         MessageId::new([0x01; 16]),
@@ -23,7 +23,7 @@ fn security_verify_accepts_signed_envelope() {
         PayloadType::Raw,
     );
     let payload = PayloadStorage::<128>::new();
-    
+
     let envelope = SignedEnvelope::sign(header, payload, &keypair);
 
     assert!(security.verify(&envelope).is_ok());

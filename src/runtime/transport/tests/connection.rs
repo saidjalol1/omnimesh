@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 
 use crate::config::OmnimeshMode;
-use crate::runtime::transport::{TransportLayer, TransportConfig};
+use crate::runtime::transport::{TransportConfig, TransportLayer};
 
 /// Tests TCP transport with actual message buffering
 #[test]
@@ -25,8 +25,8 @@ fn transport_envelope_serialization_roundtrip() {
     use crate::envelope::Did;
     use crate::runtime::transport::DEFAULT_PAYLOAD_CAPACITY;
 
-    let transport = TransportLayer::new(&OmnimeshMode::development())
-        .expect("transport creation failed");
+    let transport =
+        TransportLayer::new(&OmnimeshMode::development()).expect("transport creation failed");
 
     // Prime the mock bus with a sample envelope addressed to a known DID
     let local_did = Did([0u8; 32]);
@@ -34,17 +34,15 @@ fn transport_envelope_serialization_roundtrip() {
     sample.header.recipient_did = local_did;
     transport.send(&sample).expect("send must succeed");
 
-    let original = transport.receive()
-        .expect("should receive envelope");
+    let original = transport.receive().expect("should receive envelope");
 
     let mut buf = [0u8; 2048];
     let len = original.serialize_into(&mut buf).unwrap();
     let serialized = &buf[..len];
     assert!(!serialized.is_empty());
 
-    let deserialized: crate::envelope::SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>
-        = crate::envelope::SignedEnvelope::deserialize(&serialized)
-        .expect("should deserialize");
+    let deserialized: crate::envelope::SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY> =
+        crate::envelope::SignedEnvelope::deserialize(&serialized).expect("should deserialize");
 
     assert_eq!(original.header.version, deserialized.header.version);
     assert_eq!(original.payload.as_slice(), deserialized.payload.as_slice());
@@ -60,10 +58,11 @@ fn all_transports_initialize_without_panic() {
     ];
 
     for mode in modes {
-        let transport = TransportLayer::new(&mode)
-            .expect(&format!("transport creation failed for {:?}", mode));
-        
-        transport.initialize()
+        let transport =
+            TransportLayer::new(&mode).expect(&format!("transport creation failed for {:?}", mode));
+
+        transport
+            .initialize()
             .expect(&format!("initialization failed for {:?}", mode));
     }
 }
@@ -77,10 +76,9 @@ fn transport_respects_custom_configuration() {
         "127.0.0.1:9443".parse().unwrap(),
     );
 
-    let transport = TransportLayer::with_config(
-        &OmnimeshMode::lightweight(),
-        custom_config.clone()
-    ).expect("transport creation failed");
+    let transport =
+        TransportLayer::with_config(&OmnimeshMode::lightweight(), custom_config.clone())
+            .expect("transport creation failed");
 
     assert_eq!(transport.config().tcp_listen_addr.port(), 9001);
     assert_eq!(transport.config().tcp_connect_addr.port(), 9002);
@@ -89,11 +87,11 @@ fn transport_respects_custom_configuration() {
 /// Tests that TCP transport gracefully handles no listeners
 #[test]
 fn tcp_transport_gracefully_fails_without_listener() {
-    let transport = TransportLayer::new(&OmnimeshMode::lightweight())
-        .expect("tcp transport creation failed");
+    let transport =
+        TransportLayer::new(&OmnimeshMode::lightweight()).expect("tcp transport creation failed");
 
     let envelope = crate::runtime::transport::common::TransportUtils::sample_envelope();
-    
+
     // Should not panic even if no one is listening
     let result = transport.send(&envelope);
     assert!(result.is_ok());
@@ -103,8 +101,8 @@ fn tcp_transport_gracefully_fails_without_listener() {
 #[test]
 fn envelope_round_trip_through_transport() {
     use crate::envelope::Did;
-    let transport = TransportLayer::new(&OmnimeshMode::development())
-        .expect("transport creation failed");
+    let transport =
+        TransportLayer::new(&OmnimeshMode::development()).expect("transport creation failed");
 
     // Prime the bus
     let local_did = Did([0u8; 32]);
@@ -112,8 +110,7 @@ fn envelope_round_trip_through_transport() {
     sample.header.recipient_did = local_did;
     transport.send(&sample).expect("prime send failed");
 
-    let received = transport.receive()
-        .expect("should receive envelope");
+    let received = transport.receive().expect("should receive envelope");
 
     let sent_result = transport.send(&received);
     assert!(sent_result.is_ok());

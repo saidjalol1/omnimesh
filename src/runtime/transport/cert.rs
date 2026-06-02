@@ -1,9 +1,9 @@
+use super::common::{certificate, errors};
 /// Certificate utilities for QUIC transport.
 ///
 /// This module provides helpers for certificate generation and management
 /// for QUIC-based secure transports.
 use std::fs;
-use super::common::{certificate, errors};
 
 /// Configuration for certificate generation.
 #[derive(Debug, Clone)]
@@ -59,21 +59,17 @@ impl CertificatePair {
         let cert_der = cert.cert.der().to_vec();
         let key_der = cert.key_pair.serialize_der();
 
-        Ok(CertificatePair {
-            cert_der,
-            key_der,
-        })
+        Ok(CertificatePair { cert_der, key_der })
     }
 
     /// Loads a certificate from PEM format strings
     ///
     /// Parses PEM-encoded certificate and private key.
     pub fn from_pem(cert_pem: &str, key_pem: &str) -> Result<Self, String> {
-        // Parse certificate from PEM  
+        // Parse certificate from PEM
         let mut cert_reader = cert_pem.as_bytes();
-        let certs: Result<Vec<_>, _> = rustls_pemfile::certs(&mut cert_reader)
-            .collect();
-        
+        let certs: Result<Vec<_>, _> = rustls_pemfile::certs(&mut cert_reader).collect();
+
         let certs = certs.map_err(|e| errors::cert_parse_failed(&e))?;
 
         let cert_der = certs
@@ -97,11 +93,10 @@ impl CertificatePair {
     ///
     /// Reads certificate and private key from separate DER files.
     pub fn from_der_files(cert_path: &str, key_path: &str) -> Result<Self, String> {
-        let cert_der = fs::read(cert_path)
-            .map_err(|e| errors::cert_file_read_failed(cert_path, &e))?;
+        let cert_der =
+            fs::read(cert_path).map_err(|e| errors::cert_file_read_failed(cert_path, &e))?;
 
-        let key_der = fs::read(key_path)
-            .map_err(|e| errors::key_file_read_failed(key_path, &e))?;
+        let key_der = fs::read(key_path).map_err(|e| errors::key_file_read_failed(key_path, &e))?;
 
         Ok(CertificatePair { cert_der, key_der })
     }

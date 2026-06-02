@@ -3,14 +3,14 @@
 //! This test exercises the full OMNI-MESH pipeline in a single flow.
 
 use omnimesh::buffer::PayloadStorage;
-use omnimesh::envelope::{Did, EnvelopeHeader, MessageId, SignedEnvelope};
 use omnimesh::config::OmnimeshMode;
+use omnimesh::envelope::{Did, EnvelopeHeader, MessageId, SignedEnvelope};
+use omnimesh::payload;
 use omnimesh::runtime::delivery::{DeliveryLayer, DeliveryStatus};
 use omnimesh::runtime::security::SecurityLayer;
-use omnimesh::runtime::storage::StorageLayer;
 use omnimesh::runtime::stats::RuntimeStats;
-use omnimesh::runtime::wcet::{WcetGuard, WcetBudget};
-use omnimesh::payload;
+use omnimesh::runtime::storage::StorageLayer;
+use omnimesh::runtime::wcet::{WcetBudget, WcetGuard};
 
 use ed25519_dalek::SigningKey;
 use rand_core::{OsRng, RngCore};
@@ -49,12 +49,20 @@ fn end_to_end_sign_verify_deliver_store() {
     stats.record_received();
 
     // --- 2. Verify signature (SecurityLayer) ---
-    let guard = WcetGuard::start("ed25519_verify", budget.ed25519_verify_us, omnimesh::config::WcetMode::Log);
+    let guard = WcetGuard::start(
+        "ed25519_verify",
+        budget.ed25519_verify_us,
+        omnimesh::config::WcetMode::Log,
+    );
     let security = SecurityLayer::new(&mode, None);
     let verify_result = security.verify(&envelope);
     let wcet_result = guard.finish();
-    
-    assert!(verify_result.is_ok(), "Signature verification must pass: {:?}", verify_result);
+
+    assert!(
+        verify_result.is_ok(),
+        "Signature verification must pass: {:?}",
+        verify_result
+    );
     assert!(wcet_result.is_ok(), "WCET must not hard-fail in Log mode");
 
     // --- 3. Deliver (DeliveryLayer — exactly-once) ---
@@ -70,13 +78,17 @@ fn end_to_end_sign_verify_deliver_store() {
 
     // --- 4. Store (StorageLayer) ---
     let mut storage = StorageLayer::new(&mode);
-    
+
     // Convert to DEFAULT_PAYLOAD_CAPACITY size for storage
     let mut payload_1024 = omnimesh::buffer::PayloadStorage::<1024>::new();
-    payload_1024.push_bytes(envelope.payload.as_slice()).unwrap();
+    payload_1024
+        .push_bytes(envelope.payload.as_slice())
+        .unwrap();
     let envelope_1024 = SignedEnvelope::new(envelope.header, payload_1024, envelope.signature);
-    
-    storage.store(envelope_1024.clone()).expect("storage must succeed");
+
+    storage
+        .store(envelope_1024.clone())
+        .expect("storage must succeed");
     assert_eq!(storage.stored_count(), 1);
 
     // --- 5. Decode the payload back ---
@@ -97,8 +109,10 @@ fn end_to_end_sign_verify_deliver_store() {
     assert_eq!(snap.total_duplicates, 1);
 
     println!("=== End-to-End Integration Test PASSED ===");
-    println!("Stats: received={}, delivered={}, duplicates={}", 
-        snap.total_messages_received, snap.total_messages_delivered, snap.total_duplicates);
+    println!(
+        "Stats: received={}, delivered={}, duplicates={}",
+        snap.total_messages_received, snap.total_messages_delivered, snap.total_duplicates
+    );
 }
 
 #[test]
@@ -175,7 +189,10 @@ fn tampered_envelope_rejected() {
     // Verification must fail
     let mode = OmnimeshMode::production();
     let security = SecurityLayer::new(&mode, None);
-    assert!(security.verify(&envelope).is_err(), "Tampered envelope must be rejected");
+    assert!(
+        security.verify(&envelope).is_err(),
+        "Tampered envelope must be rejected"
+    );
 
     println!("=== Tamper Detection Test PASSED ===");
 }

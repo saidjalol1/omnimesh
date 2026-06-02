@@ -88,10 +88,10 @@
 //! All transports are thread-safe and designed for concurrent access.
 //! Uses `Arc<Mutex<>>` for channel receivers and `tokio` for async operations.
 
+pub mod cert;
 pub mod common;
 pub mod compression;
 pub mod config;
-pub mod cert;
 pub mod interface;
 pub mod layer;
 pub mod mock;
@@ -100,9 +100,9 @@ pub mod tcp;
 pub mod tests;
 
 // Re-export the main types for convenience
+pub use compression::{CompressionConfig, compress, compression_ratio, decompress};
 pub use config::TransportConfig;
-pub use compression::{CompressionConfig, compress, decompress, compression_ratio};
-pub use interface::{Transport, DEFAULT_PAYLOAD_CAPACITY};
+pub use interface::{DEFAULT_PAYLOAD_CAPACITY, Transport};
 pub use layer::TransportLayer;
 
 // Re-export transport implementations for advanced usage

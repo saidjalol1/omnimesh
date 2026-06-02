@@ -1,13 +1,13 @@
-use crate::envelope::SignedEnvelope;
-use crate::runtime::transport::config::TransportConfig;
-use crate::runtime::transport::interface::{Transport, DEFAULT_PAYLOAD_CAPACITY};
-use crate::runtime::transport::common::{TransportUtils, errors, logging};
 use crate::config::modes::layer_kinds;
+use crate::envelope::SignedEnvelope;
+use crate::runtime::transport::common::{TransportUtils, errors, logging};
+use crate::runtime::transport::config::TransportConfig;
+use crate::runtime::transport::interface::{DEFAULT_PAYLOAD_CAPACITY, Transport};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 
 /// Connection pool for reusing TCP connections
 #[derive(Debug)]
@@ -34,9 +34,10 @@ impl ConnectionPool {
 
         // If pool is full, remove oldest connection
         if self.connections.len() >= self.max_pool_size
-            && let Some(key) = self.connections.keys().next().copied() {
-                self.connections.remove(&key);
-            }
+            && let Some(key) = self.connections.keys().next().copied()
+        {
+            self.connections.remove(&key);
+        }
 
         // Create new connection
         let stream = TcpStream::connect(addr)
@@ -98,7 +99,10 @@ impl TcpTransport {
     /// - Background TCP listener for incoming connections
     /// - Send worker with bounded buffer (1000 messages)
     /// - Connection health monitor
-    pub fn new(config: TransportConfig, routing: Arc<crate::runtime::RoutingTable>) -> Result<Self, String> {
+    pub fn new(
+        config: TransportConfig,
+        routing: Arc<crate::runtime::RoutingTable>,
+    ) -> Result<Self, String> {
         let runtime = TransportUtils::create_runtime()?;
 
         let (tx, rx) = mpsc::unbounded_channel();
@@ -107,7 +111,7 @@ impl TcpTransport {
         let stats = Arc::new(Mutex::new(TransportStats::default()));
 
         let runtime = Arc::new(runtime);
-        
+
         let transport = TcpTransport {
             kind: layer_kinds::TCP_TRANSPORT,
             runtime: runtime.clone(),
@@ -127,11 +131,11 @@ impl TcpTransport {
             while let Some(req) = send_rx.recv().await {
                 let mut pool_guard = pool_clone.lock().await;
                 let mut stats_guard = stats_clone.lock().await;
-                
+
                 // Try to send with exponential backoff
                 let mut retries = 0;
                 let max_retries = 3;
-                
+
                 while retries < max_retries {
                     match pool_guard.get_or_create(req.addr).await {
                         Ok(_) => {
@@ -153,12 +157,15 @@ impl TcpTransport {
                                             pool_guard.remove(req.addr);
                                             stats_guard.send_failures += 1;
                                             retries += 1;
-                                            
+
                                             if retries < max_retries {
                                                 stats_guard.reconnections += 1;
-                                                tokio::time::sleep(tokio::time::Duration::from_millis(
-                                                    100 * (1 << retries) // Exponential backoff
-                                                )).await;
+                                                tokio::time::sleep(
+                                                    tokio::time::Duration::from_millis(
+                                                        100 * (1 << retries), // Exponential backoff
+                                                    ),
+                                                )
+                                                .await;
                                             }
                                         }
                                     }
@@ -168,11 +175,12 @@ impl TcpTransport {
                         Err(_) => {
                             stats_guard.send_failures += 1;
                             retries += 1;
-                            
+
                             if retries < max_retries {
                                 tokio::time::sleep(tokio::time::Duration::from_millis(
-                                    100 * (1 << retries)
-                                )).await;
+                                    100 * (1 << retries),
+                                ))
+                                .await;
                             }
                         }
                     }
@@ -196,11 +204,11 @@ impl TcpTransport {
                                 logging::tcp_connection_received(peer_addr);
                                 let tx = tx_clone.clone();
                                 let stats = stats_clone.clone();
-                                
+
                                 tokio::spawn(async move {
                                     let mut len_buf = [0u8; 4];
                                     let mut msg_buf = [0u8; 2048];
-                                    
+
                                     'connection: loop {
                                         // Read 4-byte length prefix
                                         if let Err(e) = socket.read_exact(&mut len_buf).await {
@@ -212,7 +220,9 @@ impl TcpTransport {
                                             break 'connection;
                                         }
                                         // Read exact message bytes
-                                        if let Err(e) = socket.read_exact(&mut msg_buf[..msg_len]).await {
+                                        if let Err(e) =
+                                            socket.read_exact(&mut msg_buf[..msg_len]).await
+                                        {
                                             logging::error_read(e);
                                             break 'connection;
                                         }
@@ -244,14 +254,14 @@ impl TcpTransport {
 
     /// Returns transport statistics
     pub fn stats(&self) -> TransportStats {
-        self.runtime.block_on(async {
-            *self.stats.lock().await
-        })
+        self.runtime.block_on(async { *self.stats.lock().await })
     }
 
     /// Returns the current pool statistics
     pub fn pool_stats(&self) -> Result<(usize, usize), String> {
-        let pool = self.pool.try_lock()
+        let pool = self
+            .pool
+            .try_lock()
             .map_err(|_| "Failed to acquire lock".to_string())?;
         Ok((pool.connections.len(), pool.max_pool_size))
     }
@@ -266,14 +276,16 @@ impl Transport for TcpTransport {
     }
 
     fn send(&self, envelope: &SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>) -> Result<(), String> {
-        let connect_addr = self.routing.resolve(&envelope.header.recipient_did)
+        let connect_addr = self
+            .routing
+            .resolve(&envelope.header.recipient_did)
             .unwrap_or(self.config.tcp_connect_addr);
-        
+
         let req = SendRequest {
             envelope: *envelope,
             addr: connect_addr,
         };
-        
+
         // Try to send with backpressure handling
         self.runtime.block_on(async {
             let send_buffer = self.send_buffer.lock().await;
@@ -285,9 +297,7 @@ impl Transport for TcpTransport {
                     stats_guard.backpressure_events += 1;
                     Err("Send buffer full - backpressure applied".to_string())
                 }
-                Err(mpsc::error::TrySendError::Closed(_)) => {
-                    Err("Send channel closed".to_string())
-                }
+                Err(mpsc::error::TrySendError::Closed(_)) => Err("Send channel closed".to_string()),
             }
         })
     }

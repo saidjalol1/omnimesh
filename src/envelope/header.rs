@@ -1,5 +1,5 @@
-use super::wire::{ParseError, RawEnvelopeHeader};
 use super::id::{Did, MessageId};
+use super::wire::{ParseError, RawEnvelopeHeader};
 
 #[derive(Debug, Clone, Copy)]
 pub struct EnvelopeHeader {

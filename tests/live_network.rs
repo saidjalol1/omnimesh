@@ -3,12 +3,12 @@
 //! These tests verify that the TCP transport can physically send and receive
 //! envelopes across real sockets on localhost.
 
-use omnimesh::envelope::{Did, EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
 use omnimesh::buffer::PayloadStorage;
-use omnimesh::runtime::transport::config::TransportConfig;
-use omnimesh::runtime::transport::tcp::TcpTransport;
-use omnimesh::runtime::transport::interface::{Transport, DEFAULT_PAYLOAD_CAPACITY};
+use omnimesh::envelope::{Did, EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
 use omnimesh::runtime::RoutingTable;
+use omnimesh::runtime::transport::config::TransportConfig;
+use omnimesh::runtime::transport::interface::{DEFAULT_PAYLOAD_CAPACITY, Transport};
+use omnimesh::runtime::transport::tcp::TcpTransport;
 use std::sync::Arc;
 
 /// Helper: create a test envelope with a given payload message
@@ -95,7 +95,10 @@ fn routing_table_resolve_and_gossip() {
 
     let routes = table.gossip_routes();
     assert_eq!(routes.len(), 2);
-    println!("✓ RoutingTable resolves DIDs and gossips {} routes", routes.len());
+    println!(
+        "✓ RoutingTable resolves DIDs and gossips {} routes",
+        routes.len()
+    );
 }
 
 /// Test that the FixedMap-backed RoutingTable handles updates correctly.

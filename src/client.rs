@@ -26,23 +26,23 @@
 //! }
 //! ```
 
-use std::sync::{Arc, Mutex, Condvar};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use ed25519_dalek::SigningKey;
 use rand_core::OsRng;
 
-use crate::config::OmnimeshMode;
-use crate::envelope::{Did, EnvelopeHeader, MessageId, Priority, PayloadType, SignedEnvelope};
 use crate::buffer::PayloadStorage;
-use crate::payload::{EnvelopePayload, encode_payload, decode_payload};
-use crate::runtime::transport::interface::DEFAULT_PAYLOAD_CAPACITY;
-use crate::runtime::transport::TransportLayer;
-use crate::runtime::security::SecurityLayer;
+use crate::config::OmnimeshMode;
+use crate::envelope::{Did, EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
+use crate::payload::{EnvelopePayload, decode_payload, encode_payload};
 use crate::runtime::RoutingTable;
+use crate::runtime::security::SecurityLayer;
+use crate::runtime::transport::TransportLayer;
+use crate::runtime::transport::interface::DEFAULT_PAYLOAD_CAPACITY;
 
 /// A message received by the SDK — fully verified and decoded.
 #[derive(Debug, Clone)]
@@ -78,23 +78,40 @@ impl Default for ClientConfig {
 
 impl ClientConfig {
     pub fn development() -> Self {
-        Self { mode: OmnimeshMode::development(), ..Default::default() }
+        Self {
+            mode: OmnimeshMode::development(),
+            ..Default::default()
+        }
     }
 
     pub fn lightweight() -> Self {
-        Self { mode: OmnimeshMode::lightweight(), ..Default::default() }
+        Self {
+            mode: OmnimeshMode::lightweight(),
+            ..Default::default()
+        }
     }
 
     pub fn lightweight_on_port(port: u16) -> Self {
-        Self { mode: OmnimeshMode::lightweight(), listen_port: Some(port), ..Default::default() }
+        Self {
+            mode: OmnimeshMode::lightweight(),
+            listen_port: Some(port),
+            ..Default::default()
+        }
     }
 
     pub fn production() -> Self {
-        Self { mode: OmnimeshMode::production(), ..Default::default() }
+        Self {
+            mode: OmnimeshMode::production(),
+            ..Default::default()
+        }
     }
 
     pub fn production_on_port(port: u16) -> Self {
-        Self { mode: OmnimeshMode::production(), listen_port: Some(port), ..Default::default() }
+        Self {
+            mode: OmnimeshMode::production(),
+            listen_port: Some(port),
+            ..Default::default()
+        }
     }
 }
 
@@ -118,7 +135,9 @@ impl ClientBuilder {
 
     pub fn build(self) -> Result<OmnimeshClient, String> {
         let config = self.config.unwrap_or_default();
-        let signing_key = self.signing_key.unwrap_or_else(|| SigningKey::generate(&mut OsRng));
+        let signing_key = self
+            .signing_key
+            .unwrap_or_else(|| SigningKey::generate(&mut OsRng));
         OmnimeshClient::new(config, signing_key)
     }
 }
@@ -175,7 +194,11 @@ impl OmnimeshClient {
                 listen_addr, // connect_addr same as listen for single-machine
                 format!("127.0.0.1:{}", port + 443).parse().unwrap(),
             );
-            Arc::new(TransportLayer::with_config_and_routing(&config.mode, transport_config, routing.clone())?)
+            Arc::new(TransportLayer::with_config_and_routing(
+                &config.mode,
+                transport_config,
+                routing.clone(),
+            )?)
         } else {
             // Use new_with_did so mock transport only pulls messages for this DID
             Arc::new(TransportLayer::new_with_did(&config.mode, did)?)
@@ -213,7 +236,9 @@ impl OmnimeshClient {
     /// Call this with the DID and IP:port of each neighbor node you know about.
     /// In a full deployment, the gossip protocol discovers these automatically.
     pub fn register_peer(&self, did: Did, addr: &str) -> Result<(), String> {
-        let socket_addr = addr.parse().map_err(|e| format!("Invalid address '{}': {}", addr, e))?;
+        let socket_addr = addr
+            .parse()
+            .map_err(|e| format!("Invalid address '{}': {}", addr, e))?;
         self.routing.update_route(did, socket_addr);
         Ok(())
     }
@@ -235,7 +260,8 @@ impl OmnimeshClient {
         if encoded.len() > DEFAULT_PAYLOAD_CAPACITY {
             return Err(format!(
                 "Payload too large: {} bytes (max {})",
-                encoded.len(), DEFAULT_PAYLOAD_CAPACITY
+                encoded.len(),
+                DEFAULT_PAYLOAD_CAPACITY
             ));
         }
 
@@ -267,7 +293,9 @@ impl OmnimeshClient {
         };
 
         let mut storage = PayloadStorage::<DEFAULT_PAYLOAD_CAPACITY>::new();
-        storage.push_bytes(&encoded).map_err(|e| format!("{:?}", e))?;
+        storage
+            .push_bytes(&encoded)
+            .map_err(|e| format!("{:?}", e))?;
 
         let envelope = SignedEnvelope::sign(header, storage, &self.signing_key);
         let result = self.transport.send(&envelope);
@@ -303,7 +331,8 @@ impl OmnimeshClient {
             if remaining.is_zero() {
                 return None;
             }
-            let (new_guard, timeout_result) = self.inbox_notify.wait_timeout(guard, remaining).ok()?;
+            let (new_guard, timeout_result) =
+                self.inbox_notify.wait_timeout(guard, remaining).ok()?;
             guard = new_guard;
             if timeout_result.timed_out() {
                 return guard.pop_front();
@@ -390,7 +419,8 @@ impl OmnimeshClient {
                             let received_at_us = SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap_or_default()
-                                .as_micros() as u64;
+                                .as_micros()
+                                as u64;
 
                             let msg = ReceivedMessage {
                                 sender: envelope.header.sender_did,
@@ -427,7 +457,10 @@ impl std::fmt::Debug for OmnimeshClient {
             .field("inbox_len", &self.inbox_len())
             .field("is_shutdown", &self.is_shutdown())
             .field("messages_sent", &self.messages_sent.load(Ordering::Relaxed))
-            .field("messages_received", &self.messages_received.load(Ordering::Relaxed))
+            .field(
+                "messages_received",
+                &self.messages_received.load(Ordering::Relaxed),
+            )
             .finish()
     }
 }

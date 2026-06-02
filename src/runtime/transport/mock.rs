@@ -1,10 +1,10 @@
-use crate::envelope::{SignedEnvelope, Did};
-use crate::runtime::transport::interface::{Transport, DEFAULT_PAYLOAD_CAPACITY};
 use crate::config::modes::layer_kinds;
+use crate::envelope::{Did, SignedEnvelope};
 use crate::runtime::RoutingTable;
+use crate::runtime::transport::interface::{DEFAULT_PAYLOAD_CAPACITY, Transport};
 
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
-use std::collections::{VecDeque, HashMap};
 
 /// A shared in-process message bus keyed by recipient DID.
 ///
@@ -21,8 +21,8 @@ impl MockBus {
     fn push(&self, env: SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>) {
         if let Ok(mut map) = self.inboxes.lock() {
             map.entry(env.header.recipient_did.0)
-               .or_default()
-               .push_back(env);
+                .or_default()
+                .push_back(env);
         }
     }
 

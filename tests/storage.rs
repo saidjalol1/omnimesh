@@ -1,6 +1,6 @@
 use omnimesh::buffer::PayloadStorage;
 use omnimesh::config::OmnimeshMode;
-use omnimesh::envelope::{EnvelopeHeader, MessageId, Did, PayloadType, Priority, SignedEnvelope};
+use omnimesh::envelope::{Did, EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
 use omnimesh::runtime::storage::StorageLayer;
 
 const STORAGE_PAYLOAD_SIZE: usize = 1024; // Match DEFAULT_PAYLOAD_CAPACITY

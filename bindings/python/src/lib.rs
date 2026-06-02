@@ -9,12 +9,12 @@
 //!   client.send_agent_command(target_did, "pick", b"robot-1", b"shelf-A12")
 //!   msg = client.receive(timeout_ms=5000)
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use pyo3::exceptions::PyValueError;
 use std::time::Duration;
 
-use ::omnimesh::client::{OmnimeshClient, ClientConfig};
+use ::omnimesh::client::{ClientConfig, OmnimeshClient};
 use ::omnimesh::envelope::Did;
 use ::omnimesh::payload::{self, PayloadKind};
 
@@ -23,7 +23,9 @@ fn parse_did(did_hex: &str) -> PyResult<Did> {
     let bytes = hex::decode(did_hex)
         .map_err(|e| PyValueError::new_err(format!("Invalid DID hex: {}", e)))?;
     if bytes.len() != 32 {
-        return Err(PyValueError::new_err("DID must be exactly 32 bytes (64 hex chars)"));
+        return Err(PyValueError::new_err(
+            "DID must be exactly 32 bytes (64 hex chars)",
+        ));
     }
     let mut arr = [0u8; 32];
     arr.copy_from_slice(&bytes);
@@ -58,9 +60,11 @@ impl Client {
             ("lightweight", None) => ClientConfig::lightweight(),
             ("production", Some(port)) => ClientConfig::production_on_port(port),
             ("production", None) => ClientConfig::production(),
-            _ => return Err(PyValueError::new_err(
-                "mode must be 'development', 'lightweight', or 'production'"
-            )),
+            _ => {
+                return Err(PyValueError::new_err(
+                    "mode must be 'development', 'lightweight', or 'production'",
+                ))
+            }
         };
         let client = OmnimeshClient::builder()
             .with_config(config)
@@ -85,7 +89,8 @@ impl Client {
     ///     addr: IP:port string (e.g. "127.0.0.1:9001")
     fn register_peer(&self, did_hex: &str, addr: &str) -> PyResult<()> {
         let did = parse_did(did_hex)?;
-        self.inner.register_peer(did, addr)
+        self.inner
+            .register_peer(did, addr)
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
@@ -105,7 +110,8 @@ impl Client {
     ) -> PyResult<()> {
         let did = parse_did(target_did_hex)?;
         let msg = payload::agent_command(command_type, target_id, payload_data);
-        self.inner.send(did, msg)
+        self.inner
+            .send(did, msg)
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
@@ -129,8 +135,17 @@ impl Client {
         deadline_ns: u64,
     ) -> PyResult<()> {
         let did = parse_did(target_did_hex)?;
-        let msg = payload::motion_command(linear_x, linear_y, linear_z, angular_x, angular_y, angular_z, deadline_ns);
-        self.inner.send(did, msg)
+        let msg = payload::motion_command(
+            linear_x,
+            linear_y,
+            linear_z,
+            angular_x,
+            angular_y,
+            angular_z,
+            deadline_ns,
+        );
+        self.inner
+            .send(did, msg)
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
@@ -152,7 +167,8 @@ impl Client {
     ) -> PyResult<()> {
         let did = parse_did(target_did_hex)?;
         let msg = payload::heartbeat(&self.inner.did.0, uptime_ms, cpu, mem_kb, epoch);
-        self.inner.send(did, msg)
+        self.inner
+            .send(did, msg)
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
@@ -172,7 +188,8 @@ impl Client {
     ) -> PyResult<()> {
         let did = parse_did(target_did_hex)?;
         let msg = payload::llm_query(prompt, system_prompt, model);
-        self.inner.send(did, msg)
+        self.inner
+            .send(did, msg)
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 

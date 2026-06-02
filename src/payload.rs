@@ -229,18 +229,40 @@ pub fn agent_command(command_type: &str, target_did: &[u8], data: &[u8]) -> Enve
 }
 
 /// Helper: create a MotionCommand payload
-pub fn motion_command(lx: f32, ly: f32, lz: f32, ax: f32, ay: f32, az: f32, deadline_ns: u64) -> EnvelopePayload {
+pub fn motion_command(
+    lx: f32,
+    ly: f32,
+    lz: f32,
+    ax: f32,
+    ay: f32,
+    az: f32,
+    deadline_ns: u64,
+) -> EnvelopePayload {
     EnvelopePayload {
         payload: Some(PayloadKind::MotionCommand(MotionCommand {
-            linear: Some(Vector3 { x: lx, y: ly, z: lz }),
-            angular: Some(Vector3 { x: ax, y: ay, z: az }),
+            linear: Some(Vector3 {
+                x: lx,
+                y: ly,
+                z: lz,
+            }),
+            angular: Some(Vector3 {
+                x: ax,
+                y: ay,
+                z: az,
+            }),
             deadline_ns,
         })),
     }
 }
 
 /// Helper: create a Heartbeat payload
-pub fn heartbeat(sender_did: &[u8], uptime_ms: u64, cpu: u32, mem_kb: u32, epoch: u64) -> EnvelopePayload {
+pub fn heartbeat(
+    sender_did: &[u8],
+    uptime_ms: u64,
+    cpu: u32,
+    mem_kb: u32,
+    epoch: u64,
+) -> EnvelopePayload {
     EnvelopePayload {
         payload: Some(PayloadKind::Heartbeat(Heartbeat {
             sender_did: sender_did.into(),
@@ -253,7 +275,12 @@ pub fn heartbeat(sender_did: &[u8], uptime_ms: u64, cpu: u32, mem_kb: u32, epoch
 }
 
 /// Helper: create a ModelWeights payload
-pub fn model_weights(model_id: &str, weights: &[u8], compression: &str, original_size: u64) -> EnvelopePayload {
+pub fn model_weights(
+    model_id: &str,
+    weights: &[u8],
+    compression: &str,
+    original_size: u64,
+) -> EnvelopePayload {
     EnvelopePayload {
         payload: Some(PayloadKind::ModelWeights(ModelWeights {
             model_id: model_id.into(),
@@ -265,7 +292,12 @@ pub fn model_weights(model_id: &str, weights: &[u8], compression: &str, original
 }
 
 /// Helper: create a SensorFusionFrame payload
-pub fn sensor_fusion(frame_id: &str, timestamp_us: u64, detections: Vec<Detection>, pose: Option<Transform>) -> EnvelopePayload {
+pub fn sensor_fusion(
+    frame_id: &str,
+    timestamp_us: u64,
+    detections: Vec<Detection>,
+    pose: Option<Transform>,
+) -> EnvelopePayload {
     EnvelopePayload {
         payload: Some(PayloadKind::SensorFusion(SensorFusionFrame {
             frame_id: frame_id.into(),

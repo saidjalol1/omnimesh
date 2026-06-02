@@ -3,12 +3,12 @@
 //! These tests verify behavior under adversarial, boundary, and failure conditions
 //! that are critical for production deployments.
 
-use omnimesh::client::{OmnimeshClient, ClientConfig};
-use omnimesh::payload::{self, PayloadKind, EnvelopePayload};
-use omnimesh::envelope::Did;
-use omnimesh::buffer::PayloadStorage;
-use omnimesh::config::OmnimeshMode;
 use ed25519_dalek::SigningKey;
+use omnimesh::buffer::PayloadStorage;
+use omnimesh::client::{ClientConfig, OmnimeshClient};
+use omnimesh::config::OmnimeshMode;
+use omnimesh::envelope::Did;
+use omnimesh::payload::{self, EnvelopePayload, PayloadKind};
 use rand_core::OsRng;
 use std::sync::Arc;
 use std::thread;
@@ -36,8 +36,11 @@ fn test_client_shutdown_stops_receiving() {
 
     assert!(result.is_none());
     // Should return almost immediately, not wait 5 seconds
-    assert!(elapsed < Duration::from_millis(100),
-        "receive_timeout took {:?} after shutdown, expected < 100ms", elapsed);
+    assert!(
+        elapsed < Duration::from_millis(100),
+        "receive_timeout took {:?} after shutdown, expected < 100ms",
+        elapsed
+    );
 }
 
 #[test]
@@ -123,13 +126,19 @@ fn test_inbox_backpressure_drops_messages() {
     }
 
     // Should have at most 5 messages (capacity limit)
-    assert!(receiver.inbox_len() <= 5,
-        "Inbox should respect capacity limit, got {}", receiver.inbox_len());
+    assert!(
+        receiver.inbox_len() <= 5,
+        "Inbox should respect capacity limit, got {}",
+        receiver.inbox_len()
+    );
 
     // Health check should show drops
     let health = receiver.health();
-    assert!(health.messages_dropped > 0,
-        "Should report dropped messages, got {}", health.messages_dropped);
+    assert!(
+        health.messages_dropped > 0,
+        "Should report dropped messages, got {}",
+        health.messages_dropped
+    );
 }
 
 #[test]
@@ -162,7 +171,9 @@ fn test_health_after_activity() {
 
     // Send some messages
     for _ in 0..3 {
-        node_a.send(node_b.did, payload::heartbeat(&[0; 32], 1000, 50, 2048, 1)).unwrap();
+        node_a
+            .send(node_b.did, payload::heartbeat(&[0; 32], 1000, 50, 2048, 1))
+            .unwrap();
     }
 
     // Wait for poller to process all messages — poll until received
@@ -210,7 +221,11 @@ fn test_maximum_payload_size() {
     let large_data = vec![0xAB; 900]; // Should fit in DEFAULT_PAYLOAD_CAPACITY
     let msg = payload::agent_command("large", &[0; 32], &large_data);
     let result = client.send(target, msg);
-    assert!(result.is_ok(), "Payload under limit should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Payload under limit should succeed: {:?}",
+        result.err()
+    );
 }
 
 #[test]
@@ -229,7 +244,9 @@ fn test_payload_with_special_characters() {
     let msg = payload::agent_command(special, b"\x00\xFF", b"\x00\x01\x02\x03");
     node_a.send(node_b.did, msg).unwrap();
 
-    let received = node_b.receive_timeout(Duration::from_secs(2)).expect("Should receive message");
+    let received = node_b
+        .receive_timeout(Duration::from_secs(2))
+        .expect("Should receive message");
     if let Some(PayloadKind::AgentCommand(cmd)) = received.payload.payload {
         assert_eq!(cmd.command_type, special);
         assert_eq!(cmd.target_did, b"\x00\xFF");
@@ -274,8 +291,11 @@ fn test_all_payload_types_roundtrip() {
             thread::sleep(Duration::from_millis(1));
         }
     }
-    assert_eq!(received_count, payloads.len(),
-        "All payload types should roundtrip successfully");
+    assert_eq!(
+        received_count,
+        payloads.len(),
+        "All payload types should roundtrip successfully"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -288,7 +308,7 @@ fn test_concurrent_sends_from_multiple_threads() {
         OmnimeshClient::builder()
             .with_config(ClientConfig::development())
             .build()
-            .unwrap()
+            .unwrap(),
     );
     let receiver = OmnimeshClient::builder()
         .with_config(ClientConfig::development())
@@ -303,11 +323,8 @@ fn test_concurrent_sends_from_multiple_threads() {
         let s = sender.clone();
         let handle = thread::spawn(move || {
             for i in 0..50 {
-                let msg = payload::agent_command(
-                    &format!("t{}-m{}", thread_id, i),
-                    b"",
-                    b"concurrent",
-                );
+                let msg =
+                    payload::agent_command(&format!("t{}-m{}", thread_id, i), b"", b"concurrent");
                 s.send(receiver_did, msg).unwrap();
             }
         });
@@ -328,7 +345,11 @@ fn test_concurrent_sends_from_multiple_threads() {
             thread::sleep(Duration::from_millis(1));
         }
     }
-    assert_eq!(total, 400, "All concurrent messages should be delivered, got {}", total);
+    assert_eq!(
+        total, 400,
+        "All concurrent messages should be delivered, got {}",
+        total
+    );
 }
 
 #[test]
@@ -337,13 +358,13 @@ fn test_concurrent_send_and_receive() {
         OmnimeshClient::builder()
             .with_config(ClientConfig::development())
             .build()
-            .unwrap()
+            .unwrap(),
     );
     let node_b = Arc::new(
         OmnimeshClient::builder()
             .with_config(ClientConfig::development())
             .build()
-            .unwrap()
+            .unwrap(),
     );
 
     let a_did = node_a.did;
@@ -377,7 +398,11 @@ fn test_concurrent_send_and_receive() {
 
     send_handle.join().unwrap();
     let received = recv_handle.join().unwrap();
-    assert_eq!(received, 100, "B should receive all 100 messages, got {}", received);
+    assert_eq!(
+        received, 100,
+        "B should receive all 100 messages, got {}",
+        received
+    );
 
     // A should have received echoes
     thread::sleep(Duration::from_millis(100));
@@ -406,11 +431,7 @@ fn test_many_clients_mesh() {
     for (i, client) in clients.iter().enumerate() {
         for (j, &target_did) in dids.iter().enumerate() {
             if i != j {
-                let msg = payload::agent_command(
-                    &format!("from-{}-to-{}", i, j),
-                    b"",
-                    b"mesh",
-                );
+                let msg = payload::agent_command(&format!("from-{}-to-{}", i, j), b"", b"mesh");
                 client.send(target_did, msg).unwrap();
             }
         }
@@ -424,8 +445,11 @@ fn test_many_clients_mesh() {
         while client.try_receive().is_some() {
             count += 1;
         }
-        assert_eq!(count, 9,
-            "Client {} should receive 9 messages, got {}", i, count);
+        assert_eq!(
+            count, 9,
+            "Client {} should receive 9 messages, got {}",
+            i, count
+        );
     }
 }
 
@@ -435,7 +459,7 @@ fn test_many_clients_mesh() {
 
 #[test]
 fn test_signature_verification_rejects_tampered_envelope() {
-    use omnimesh::envelope::{EnvelopeHeader, MessageId, SignedEnvelope, Priority, PayloadType};
+    use omnimesh::envelope::{EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
     use omnimesh::runtime::security::SecurityLayer;
 
     let mode = OmnimeshMode::production();
@@ -466,12 +490,15 @@ fn test_signature_verification_rejects_tampered_envelope() {
 
     // Verification should fail
     let result = security.verify(&envelope);
-    assert!(result.is_err(), "Tampered envelope should fail verification");
+    assert!(
+        result.is_err(),
+        "Tampered envelope should fail verification"
+    );
 }
 
 #[test]
 fn test_signature_verification_rejects_wrong_key() {
-    use omnimesh::envelope::{EnvelopeHeader, MessageId, SignedEnvelope, Priority, PayloadType};
+    use omnimesh::envelope::{EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
     use omnimesh::runtime::security::SecurityLayer;
 
     let mode = OmnimeshMode::production();
@@ -499,12 +526,15 @@ fn test_signature_verification_rejects_wrong_key() {
 
     // Verification should fail because sender_did doesn't match signing key
     let result = security.verify(&envelope);
-    assert!(result.is_err(), "Wrong-key envelope should fail verification");
+    assert!(
+        result.is_err(),
+        "Wrong-key envelope should fail verification"
+    );
 }
 
 #[test]
 fn test_unsigned_envelope_rejected_in_production() {
-    use omnimesh::envelope::{EnvelopeHeader, MessageId, SignedEnvelope, Priority, PayloadType};
+    use omnimesh::envelope::{EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
     use omnimesh::runtime::security::SecurityLayer;
 
     let mode = OmnimeshMode::production();
@@ -526,7 +556,10 @@ fn test_unsigned_envelope_rejected_in_production() {
     let envelope = SignedEnvelope::new(header, payload_buf, [0u8; 64]);
 
     let result = security.verify(&envelope);
-    assert!(result.is_err(), "Unsigned envelope should be rejected in production mode");
+    assert!(
+        result.is_err(),
+        "Unsigned envelope should be rejected in production mode"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -535,7 +568,7 @@ fn test_unsigned_envelope_rejected_in_production() {
 
 #[test]
 fn test_out_of_order_delivery_reordering() {
-    use omnimesh::envelope::{EnvelopeHeader, MessageId, SignedEnvelope, Priority, PayloadType};
+    use omnimesh::envelope::{EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
     use omnimesh::runtime::delivery::{DeliveryLayer, DeliveryStatus};
 
     let mode = OmnimeshMode::development();
@@ -574,7 +607,7 @@ fn test_out_of_order_delivery_reordering() {
 
 #[test]
 fn test_duplicate_detection() {
-    use omnimesh::envelope::{EnvelopeHeader, MessageId, SignedEnvelope, Priority, PayloadType};
+    use omnimesh::envelope::{EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
     use omnimesh::runtime::delivery::{DeliveryLayer, DeliveryStatus};
 
     let mode = OmnimeshMode::development();
@@ -610,7 +643,7 @@ fn test_duplicate_detection() {
 
 #[test]
 fn test_stale_message_rejected() {
-    use omnimesh::envelope::{EnvelopeHeader, MessageId, SignedEnvelope, Priority, PayloadType};
+    use omnimesh::envelope::{EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
     use omnimesh::runtime::delivery::{DeliveryLayer, DeliveryStatus};
 
     let mode = OmnimeshMode::development();
@@ -686,7 +719,7 @@ fn test_payload_storage_exact_capacity() {
 
 #[test]
 fn test_envelope_serialize_deserialize_roundtrip() {
-    use omnimesh::envelope::{EnvelopeHeader, MessageId, SignedEnvelope, Priority, PayloadType};
+    use omnimesh::envelope::{EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
 
     let signing_key = SigningKey::generate(&mut OsRng);
     let sender_did = Did::new(signing_key.verifying_key().to_bytes());
@@ -717,8 +750,14 @@ fn test_envelope_serialize_deserialize_roundtrip() {
     assert_eq!(original.header.version, restored.header.version);
     assert_eq!(original.header.message_id.0, restored.header.message_id.0);
     assert_eq!(original.header.sender_did.0, restored.header.sender_did.0);
-    assert_eq!(original.header.recipient_did.0, restored.header.recipient_did.0);
-    assert_eq!(original.header.sequence_number, restored.header.sequence_number);
+    assert_eq!(
+        original.header.recipient_did.0,
+        restored.header.recipient_did.0
+    );
+    assert_eq!(
+        original.header.sequence_number,
+        restored.header.sequence_number
+    );
     assert_eq!(original.payload.as_slice(), restored.payload.as_slice());
     assert_eq!(original.signature, restored.signature);
 
@@ -745,10 +784,16 @@ fn test_receive_timeout_accuracy() {
 
     assert!(result.is_none());
     // Should be within 50ms of the target (generous for CI)
-    assert!(elapsed >= Duration::from_millis(90),
-        "Timeout too short: {:?}", elapsed);
-    assert!(elapsed < Duration::from_millis(200),
-        "Timeout too long: {:?}", elapsed);
+    assert!(
+        elapsed >= Duration::from_millis(90),
+        "Timeout too short: {:?}",
+        elapsed
+    );
+    assert!(
+        elapsed < Duration::from_millis(200),
+        "Timeout too long: {:?}",
+        elapsed
+    );
 }
 
 #[test]
@@ -774,8 +819,11 @@ fn test_rapid_send_receive_latency() {
 
     assert!(received.is_some(), "Message should arrive");
     // In-process mock transport should be sub-100ms (generous for CI)
-    assert!(latency < Duration::from_millis(100),
-        "Latency too high for mock transport: {:?}", latency);
+    assert!(
+        latency < Duration::from_millis(100),
+        "Latency too high for mock transport: {:?}",
+        latency
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -834,6 +882,8 @@ fn test_deterministic_did_from_key() {
         .build()
         .unwrap();
 
-    assert_eq!(client1.did.0, client2.did.0,
-        "Same signing key should produce same DID");
+    assert_eq!(
+        client1.did.0, client2.did.0,
+        "Same signing key should produce same DID"
+    );
 }

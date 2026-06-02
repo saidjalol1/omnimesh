@@ -2,7 +2,9 @@
 
 #![allow(unused_imports)]
 
-use crate::runtime::transport::compression::{CompressionConfig, compress, decompress, compression_ratio};
+use crate::runtime::transport::compression::{
+    CompressionConfig, compress, compression_ratio, decompress,
+};
 
 #[test]
 fn compression_config_default_enabled() {
@@ -57,7 +59,10 @@ fn compress_decompresses_correctly() {
     let config = CompressionConfig::default();
 
     let compressed = compress(&original, config).expect("should compress");
-    assert!(compressed.len() < original.len(), "compressed should be smaller");
+    assert!(
+        compressed.len() < original.len(),
+        "compressed should be smaller"
+    );
 
     let decompressed = decompress(&compressed).expect("should decompress");
     assert_eq!(decompressed, original.to_vec());
@@ -78,7 +83,7 @@ fn compression_ratio_valid() {
 #[test]
 fn maximum_compression_reduces_size_most() {
     let data = &b"repetitive data for compression testing ".repeat(50);
-    
+
     let config_normal = CompressionConfig::default();
     let config_max = CompressionConfig::maximum();
     let config_fast = CompressionConfig::fast();

@@ -1,9 +1,9 @@
+use crate::buffer::{FixedMap, RingBuffer};
 use crate::config::OmnimeshMode;
 use crate::config::modes::layer_kinds;
 use crate::envelope::{Did, MessageId, SignedEnvelope};
 use crate::runtime::RuntimeLayer;
 use crate::runtime::storage::DtnStore;
-use crate::buffer::{FixedMap, RingBuffer};
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,7 +54,7 @@ impl<const N: usize> OrderedChannel<N> {
 
     pub fn process(&mut self, envelope: &SignedEnvelope<N>) -> DeliveryStatus {
         let msg_id = envelope.header.message_id;
-        
+
         // 1. Deduplication (Exactly-Once)
         // Check persistent store first (if available)
         if let Some(ref persistent) = self.persistent_dedup {
@@ -62,7 +62,7 @@ impl<const N: usize> OrderedChannel<N> {
                 return DeliveryStatus::Duplicate;
             }
         }
-        
+
         // Then check ring buffer (fast path)
         if self.seen_ring.contains(|id| *id == msg_id) {
             return DeliveryStatus::Duplicate;
@@ -80,12 +80,12 @@ impl<const N: usize> OrderedChannel<N> {
         if seq == expected {
             // Deliver current
             self.seen_ring.insert(msg_id);
-            
+
             // Mark as seen in persistent store
             if let Some(ref persistent) = self.persistent_dedup {
                 let _ = persistent.mark_message_seen(&msg_id);
             }
-            
+
             // Advance expected
             let mut next = seq + 1;
             let _ = self.next_expected.insert(channel_id, next);
@@ -94,12 +94,12 @@ impl<const N: usize> OrderedChannel<N> {
             while let Some(pending) = self.pending.remove(&(channel_id, next)) {
                 let pending_msg_id = pending.envelope.header.message_id;
                 self.seen_ring.insert(pending_msg_id);
-                
+
                 // Mark buffered messages as seen too
                 if let Some(ref persistent) = self.persistent_dedup {
                     let _ = persistent.mark_message_seen(&pending_msg_id);
                 }
-                
+
                 next += 1;
                 let _ = self.next_expected.insert(channel_id, next);
             }
@@ -107,7 +107,9 @@ impl<const N: usize> OrderedChannel<N> {
             DeliveryStatus::Delivered
         } else {
             // Buffer future messages
-            let pending_msg = PendingMessage { envelope: *envelope };
+            let pending_msg = PendingMessage {
+                envelope: *envelope,
+            };
             match self.pending.insert((channel_id, seq), pending_msg) {
                 Ok(_) => DeliveryStatus::Buffered(seq),
                 Err(_) => DeliveryStatus::BufferFull,
@@ -163,7 +165,10 @@ impl DeliveryLayer {
         }
     }
 
-    pub fn deliver<const N: usize>(&self, envelope: &SignedEnvelope<N>) -> Result<DeliveryStatus, String> {
+    pub fn deliver<const N: usize>(
+        &self,
+        envelope: &SignedEnvelope<N>,
+    ) -> Result<DeliveryStatus, String> {
         // We only support N=128 right now due to our mutex type, but normally this would be generic
         // To simplify, we will just assume the envelope fits or we serialize it
         // Actually, since this is an in-memory layer in the runtime, we can cheat
@@ -171,25 +176,22 @@ impl DeliveryLayer {
         // Wait, for this demo we'll use a hack to copy it to a 128 buffer:
         let mut payload_128 = crate::buffer::PayloadStorage::<128>::new();
         let _ = payload_128.push_bytes(envelope.payload.as_slice());
-        
+
         let header = envelope.header;
         let mut sig = [0u8; 64];
         sig.copy_from_slice(&envelope.signature);
         let env_128 = SignedEnvelope::new(header, payload_128, sig);
 
         let status = self.channel.lock().unwrap().process(&env_128);
-        
+
         println!(
             "Delivery to {:?} from {:?} via {}: {:?}",
-            envelope.header.recipient_did,
-            envelope.header.sender_did,
-            self.kind,
-            status
+            envelope.header.recipient_did, envelope.header.sender_did, self.kind, status
         );
-        
+
         Ok(status)
     }
-    
+
     /// Clean up old deduplication entries (call periodically)
     pub fn cleanup_old_dedup_entries(&self, retention_seconds: u64) -> Result<usize, String> {
         let channel = self.channel.lock().unwrap();

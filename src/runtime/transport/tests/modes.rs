@@ -2,9 +2,9 @@
 
 #![allow(unused_imports)]
 
+use super::helpers::{assert_transport_kind, create_and_initialize_transport};
 use crate::config::OmnimeshMode;
 use crate::runtime::transport::TransportLayer;
-use super::helpers::{assert_transport_kind, create_and_initialize_transport};
 
 #[test]
 fn transport_development_mode_uses_mock() {
@@ -29,13 +29,9 @@ fn mock_transport_sends_envelope() {
 
     let envelope = crate::runtime::transport::common::TransportUtils::sample_envelope();
     // In modes test, we just want to ensure it doesn't crash on send
-    transport
-        .send(&envelope)
-        .expect("send should succeed");
+    transport.send(&envelope).expect("send should succeed");
 
-    transport
-        .send(&envelope)
-        .expect("send should succeed");
+    transport.send(&envelope).expect("send should succeed");
 
     assert_eq!(transport.kind(), "mock transport");
 }

@@ -1,13 +1,13 @@
-use crate::envelope::SignedEnvelope;
-use crate::runtime::transport::config::TransportConfig;
-use crate::runtime::transport::cert::{CertificateConfig, CertificatePair};
-use crate::runtime::transport::interface::{Transport, DEFAULT_PAYLOAD_CAPACITY};
-use crate::runtime::transport::common::{TransportUtils, errors, logging};
 use crate::config::modes::layer_kinds;
+use crate::envelope::SignedEnvelope;
+use crate::runtime::transport::cert::{CertificateConfig, CertificatePair};
+use crate::runtime::transport::common::{TransportUtils, errors, logging};
+use crate::runtime::transport::config::TransportConfig;
+use crate::runtime::transport::interface::{DEFAULT_PAYLOAD_CAPACITY, Transport};
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 
-use quinn::{Endpoint, ServerConfig, ClientConfig};
+use quinn::{ClientConfig, Endpoint, ServerConfig};
 
 /// Dummy certificate verifier for self-signed certificates in dev mode
 #[derive(Debug)]
@@ -23,7 +23,7 @@ impl rustls::client::danger::ServerCertVerifier for DummyVerifier {
     ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
         Ok(rustls::client::danger::ServerCertVerified::assertion())
     }
-    
+
     fn verify_tls12_signature(
         &self,
         _message: &[u8],
@@ -32,7 +32,7 @@ impl rustls::client::danger::ServerCertVerifier for DummyVerifier {
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
         Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
-    
+
     fn verify_tls13_signature(
         &self,
         _message: &[u8],
@@ -41,7 +41,7 @@ impl rustls::client::danger::ServerCertVerifier for DummyVerifier {
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
         Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
-    
+
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
         vec![
             rustls::SignatureScheme::ED25519,
@@ -79,7 +79,10 @@ pub struct QuicTransport {
 }
 
 impl QuicTransport {
-    pub fn new(config: TransportConfig, routing: Arc<crate::runtime::RoutingTable>) -> Result<Self, String> {
+    pub fn new(
+        config: TransportConfig,
+        routing: Arc<crate::runtime::RoutingTable>,
+    ) -> Result<Self, String> {
         let _ = rustls::crypto::ring::default_provider().install_default();
         let runtime = TransportUtils::create_runtime()?;
 
@@ -98,16 +101,16 @@ impl QuicTransport {
             .with_no_client_auth()
             .with_single_cert(vec![cert_der], key_der)
             .map_err(|e: rustls::Error| e.to_string())?;
-        
+
         server_crypto.alpn_protocols = vec![b"omnimesh".to_vec()];
         let quic_server_config = quinn::crypto::rustls::QuicServerConfig::try_from(server_crypto)
             .map_err(|e| e.to_string())?;
         let server_config = ServerConfig::with_crypto(Arc::new(quic_server_config));
 
         let listen_addr = config.quic_listen_addr;
-        let endpoint = runtime.block_on(async {
-            Endpoint::server(server_config, listen_addr)
-        }).map_err(|e| format!("QUIC bind failed: {}", e))?;
+        let endpoint = runtime
+            .block_on(async { Endpoint::server(server_config, listen_addr) })
+            .map_err(|e| format!("QUIC bind failed: {}", e))?;
 
         logging::quic_endpoint_initialized(listen_addr);
 
@@ -136,55 +139,45 @@ impl QuicTransport {
         runtime_clone.spawn(async move {
             while let Some(req) = send_rx.recv().await {
                 let mut stats_guard = stats_clone.lock().await;
-                
+
                 // Try to send with exponential backoff
                 let mut retries = 0;
                 let max_retries = 3;
-                
+
                 while retries < max_retries {
                     let mut client_crypto = rustls::ClientConfig::builder()
                         .dangerous()
                         .with_custom_certificate_verifier(Arc::new(DummyVerifier))
                         .with_no_client_auth();
                     client_crypto.alpn_protocols = vec![b"omnimesh".to_vec()];
-                    let quic_client_config = quinn::crypto::rustls::QuicClientConfig::try_from(client_crypto).unwrap();
+                    let quic_client_config =
+                        quinn::crypto::rustls::QuicClientConfig::try_from(client_crypto).unwrap();
                     let client_config = ClientConfig::new(Arc::new(quic_client_config));
 
                     match endpoint_send.connect_with(client_config, req.addr, "localhost") {
-                        Ok(connecting) => {
-                            match connecting.await {
-                                Ok(connection) => {
-                                    match connection.open_uni().await {
-                                        Ok(mut stream) => {
-                                            let mut buf = [0u8; 2048];
-                                            if let Ok(len) = req.envelope.serialize_into(&mut buf) {
-                                                match stream.write_all(&buf[..len]).await {
-                                                    Ok(_) => {
-                                                        stats_guard.messages_sent += 1;
-                                                        break;
-                                                    }
-                                                    Err(_) => {
-                                                        stats_guard.send_failures += 1;
-                                                        retries += 1;
-                                                        
-                                                        if retries < max_retries {
-                                                            stats_guard.reconnections += 1;
-                                                            tokio::time::sleep(tokio::time::Duration::from_millis(
-                                                                100 * (1 << retries)
-                                                            )).await;
-                                                        }
-                                                    }
-                                                }
+                        Ok(connecting) => match connecting.await {
+                            Ok(connection) => match connection.open_uni().await {
+                                Ok(mut stream) => {
+                                    let mut buf = [0u8; 2048];
+                                    if let Ok(len) = req.envelope.serialize_into(&mut buf) {
+                                        match stream.write_all(&buf[..len]).await {
+                                            Ok(_) => {
+                                                stats_guard.messages_sent += 1;
+                                                break;
                                             }
-                                        }
-                                        Err(_) => {
-                                            stats_guard.send_failures += 1;
-                                            retries += 1;
-                                            
-                                            if retries < max_retries {
-                                                tokio::time::sleep(tokio::time::Duration::from_millis(
-                                                    100 * (1 << retries)
-                                                )).await;
+                                            Err(_) => {
+                                                stats_guard.send_failures += 1;
+                                                retries += 1;
+
+                                                if retries < max_retries {
+                                                    stats_guard.reconnections += 1;
+                                                    tokio::time::sleep(
+                                                        tokio::time::Duration::from_millis(
+                                                            100 * (1 << retries),
+                                                        ),
+                                                    )
+                                                    .await;
+                                                }
                                             }
                                         }
                                     }
@@ -192,23 +185,36 @@ impl QuicTransport {
                                 Err(_) => {
                                     stats_guard.send_failures += 1;
                                     retries += 1;
-                                    
+
                                     if retries < max_retries {
                                         tokio::time::sleep(tokio::time::Duration::from_millis(
-                                            100 * (1 << retries)
-                                        )).await;
+                                            100 * (1 << retries),
+                                        ))
+                                        .await;
                                     }
                                 }
+                            },
+                            Err(_) => {
+                                stats_guard.send_failures += 1;
+                                retries += 1;
+
+                                if retries < max_retries {
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(
+                                        100 * (1 << retries),
+                                    ))
+                                    .await;
+                                }
                             }
-                        }
+                        },
                         Err(_) => {
                             stats_guard.send_failures += 1;
                             retries += 1;
-                            
+
                             if retries < max_retries {
                                 tokio::time::sleep(tokio::time::Duration::from_millis(
-                                            100 * (1 << retries)
-                                        )).await;
+                                    100 * (1 << retries),
+                                ))
+                                .await;
                             }
                         }
                     }
@@ -228,9 +234,9 @@ impl QuicTransport {
     }
 
     async fn accept_loop(
-        endpoint: Endpoint, 
+        endpoint: Endpoint,
         tx: mpsc::UnboundedSender<SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>>,
-        stats: Arc<Mutex<TransportStats>>
+        stats: Arc<Mutex<TransportStats>>,
     ) {
         while let Some(conn) = endpoint.accept().await {
             let tx = tx.clone();
@@ -242,12 +248,13 @@ impl QuicTransport {
                         let stats = stats.clone();
                         tokio::spawn(async move {
                             if let Ok(data) = stream.read_to_end(1024 * 1024).await
-                                && let Ok(envelope) = SignedEnvelope::deserialize(&data) {
-                                    if tx.send(envelope).is_ok() {
-                                        let mut stats_guard = stats.lock().await;
-                                        stats_guard.messages_received += 1;
-                                    }
+                                && let Ok(envelope) = SignedEnvelope::deserialize(&data)
+                            {
+                                if tx.send(envelope).is_ok() {
+                                    let mut stats_guard = stats.lock().await;
+                                    stats_guard.messages_received += 1;
                                 }
+                            }
                         });
                     }
                 }
@@ -257,9 +264,7 @@ impl QuicTransport {
 
     /// Returns transport statistics
     pub fn stats(&self) -> TransportStats {
-        self.runtime.block_on(async {
-            *self.stats.lock().await
-        })
+        self.runtime.block_on(async { *self.stats.lock().await })
     }
 }
 
@@ -272,14 +277,16 @@ impl Transport for QuicTransport {
     }
 
     fn send(&self, envelope: &SignedEnvelope<DEFAULT_PAYLOAD_CAPACITY>) -> Result<(), String> {
-        let connect_addr = self.routing.resolve(&envelope.header.recipient_did)
+        let connect_addr = self
+            .routing
+            .resolve(&envelope.header.recipient_did)
             .unwrap_or(self.config.quic_listen_addr);
-        
+
         let req = SendRequest {
             envelope: *envelope,
             addr: connect_addr,
         };
-        
+
         // Try to send with backpressure handling
         self.runtime.block_on(async {
             let send_buffer = self.send_buffer.lock().await;
@@ -291,9 +298,7 @@ impl Transport for QuicTransport {
                     stats_guard.backpressure_events += 1;
                     Err("Send buffer full - backpressure applied".to_string())
                 }
-                Err(mpsc::error::TrySendError::Closed(_)) => {
-                    Err("Send channel closed".to_string())
-                }
+                Err(mpsc::error::TrySendError::Closed(_)) => Err("Send channel closed".to_string()),
             }
         })
     }

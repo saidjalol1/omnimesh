@@ -1,6 +1,6 @@
 use omnimesh::buffer::PayloadStorage;
 use omnimesh::config::OmnimeshMode;
-use omnimesh::envelope::{EnvelopeHeader, MessageId, Did, PayloadType, Priority, SignedEnvelope};
+use omnimesh::envelope::{Did, EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
 use omnimesh::runtime::delivery::DeliveryLayer;
 
 #[test]

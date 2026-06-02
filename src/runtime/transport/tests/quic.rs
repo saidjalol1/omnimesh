@@ -2,9 +2,9 @@
 
 #![allow(unused_imports)]
 
-use crate::runtime::transport::quic::QuicTransport;
-use crate::runtime::transport::interface::Transport;
 use crate::runtime::transport::config::TransportConfig;
+use crate::runtime::transport::interface::Transport;
+use crate::runtime::transport::quic::QuicTransport;
 
 #[test]
 fn quic_transport_initializes_with_config() {
@@ -14,7 +14,10 @@ fn quic_transport_initializes_with_config() {
         "127.0.0.1:9999".parse().unwrap(),
         "127.0.0.1:0".parse().unwrap(), // Port 0 = OS assigns random port
     );
-    let transport = QuicTransport::new(config, std::sync::Arc::new(crate::runtime::RoutingTable::new()));
+    let transport = QuicTransport::new(
+        config,
+        std::sync::Arc::new(crate::runtime::RoutingTable::new()),
+    );
     assert!(transport.is_ok());
 }
 
@@ -26,7 +29,11 @@ fn quic_transport_kind_is_correct() {
         "127.0.0.1:9998".parse().unwrap(),
         "127.0.0.1:0".parse().unwrap(),
     );
-    let transport = QuicTransport::new(config, std::sync::Arc::new(crate::runtime::RoutingTable::new())).unwrap();
+    let transport = QuicTransport::new(
+        config,
+        std::sync::Arc::new(crate::runtime::RoutingTable::new()),
+    )
+    .unwrap();
     assert_eq!(transport.kind(), "quic transport");
 }
 
@@ -38,7 +45,11 @@ fn quic_transport_send_succeeds() {
         "127.0.0.1:9997".parse().unwrap(),
         "127.0.0.1:0".parse().unwrap(),
     );
-    let transport = QuicTransport::new(config, std::sync::Arc::new(crate::runtime::RoutingTable::new())).unwrap();
+    let transport = QuicTransport::new(
+        config,
+        std::sync::Arc::new(crate::runtime::RoutingTable::new()),
+    )
+    .unwrap();
 
     let envelope = crate::runtime::transport::common::TransportUtils::sample_envelope();
     let result = transport.send(&envelope);

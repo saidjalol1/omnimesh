@@ -61,7 +61,7 @@ impl LogEntry {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_micros() as u64;
-        
+
         LogEntry {
             timestamp,
             level,
@@ -75,42 +75,42 @@ impl LogEntry {
             error: None,
         }
     }
-    
+
     pub fn with_message_id(mut self, id: impl Into<String>) -> Self {
         self.message_id = Some(id.into());
         self
     }
-    
+
     pub fn with_sender(mut self, did: impl Into<String>) -> Self {
         self.sender_did = Some(did.into());
         self
     }
-    
+
     pub fn with_recipient(mut self, did: impl Into<String>) -> Self {
         self.recipient_did = Some(did.into());
         self
     }
-    
+
     pub fn with_transport(mut self, transport: impl Into<String>) -> Self {
         self.transport = Some(transport.into());
         self
     }
-    
+
     pub fn with_operation(mut self, op: impl Into<String>) -> Self {
         self.operation = Some(op.into());
         self
     }
-    
+
     pub fn with_latency(mut self, latency_us: u64) -> Self {
         self.latency_us = Some(latency_us);
         self
     }
-    
+
     pub fn with_error(mut self, error: impl Into<String>) -> Self {
         self.error = Some(error.into());
         self
     }
-    
+
     /// Format as JSON for structured logging
     pub fn to_json(&self) -> String {
         let mut fields = vec![
@@ -118,7 +118,7 @@ impl LogEntry {
             format!("\"level\":\"{}\"", self.level.as_str()),
             format!("\"message\":\"{}\"", self.message.replace('"', "\\\"")),
         ];
-        
+
         if let Some(ref id) = self.message_id {
             fields.push(format!("\"message_id\":\"{}\"", id));
         }
@@ -140,17 +140,14 @@ impl LogEntry {
         if let Some(ref error) = self.error {
             fields.push(format!("\"error\":\"{}\"", error.replace('"', "\\\"")));
         }
-        
+
         format!("{{{}}}", fields.join(","))
     }
-    
+
     /// Format as human-readable text
     pub fn to_text(&self) -> String {
-        let mut parts = vec![
-            format!("[{}]", self.level.as_str()),
-            self.message.clone(),
-        ];
-        
+        let mut parts = vec![format!("[{}]", self.level.as_str()), self.message.clone()];
+
         if let Some(ref id) = self.message_id {
             parts.push(format!("msg_id={}", id));
         }
@@ -172,7 +169,7 @@ impl LogEntry {
         if let Some(ref error) = self.error {
             parts.push(format!("error={}", error));
         }
-        
+
         parts.join(" ")
     }
 }
@@ -186,27 +183,33 @@ pub struct Logger {
 
 impl Logger {
     pub fn new(min_level: LogLevel, json_format: bool) -> Self {
-        Logger { min_level, json_format }
+        Logger {
+            min_level,
+            json_format,
+        }
     }
-    
+
     pub fn log(&self, entry: LogEntry) {
         // Check if we should log this level
         let should_log = match (self.min_level, entry.level) {
             (LogLevel::Error, LogLevel::Error) => true,
             (LogLevel::Warn, LogLevel::Error | LogLevel::Warn) => true,
             (LogLevel::Info, LogLevel::Error | LogLevel::Warn | LogLevel::Info) => true,
-            (LogLevel::Debug, LogLevel::Error | LogLevel::Warn | LogLevel::Info | LogLevel::Debug) => true,
+            (
+                LogLevel::Debug,
+                LogLevel::Error | LogLevel::Warn | LogLevel::Info | LogLevel::Debug,
+            ) => true,
             (LogLevel::Trace, _) => true,
             _ => false,
         };
-        
+
         if should_log {
             let output = if self.json_format {
                 entry.to_json()
             } else {
                 entry.to_text()
             };
-            
+
             println!("{}", output);
         }
     }
@@ -246,7 +249,7 @@ macro_rules! log_info {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_log_entry_json() {
         let entry = LogEntry::new(LogLevel::Info, "Test message")
@@ -256,43 +259,43 @@ mod tests {
             .with_transport("tcp")
             .with_operation("send")
             .with_latency(150);
-        
+
         let json = entry.to_json();
-        
+
         assert!(json.contains("\"level\":\"INFO\""));
         assert!(json.contains("\"message\":\"Test message\""));
         assert!(json.contains("\"message_id\":\"abc123\""));
         assert!(json.contains("\"sender_did\":\"did:omni:sender\""));
         assert!(json.contains("\"transport\":\"tcp\""));
         assert!(json.contains("\"latency_us\":150"));
-        
+
         println!("JSON: {}", json);
     }
-    
+
     #[test]
     fn test_log_entry_text() {
         let entry = LogEntry::new(LogLevel::Warn, "Connection timeout")
             .with_transport("quic")
             .with_error("Connection refused");
-        
+
         let text = entry.to_text();
-        
+
         assert!(text.contains("[WARN]"));
         assert!(text.contains("Connection timeout"));
         assert!(text.contains("transport=quic"));
         assert!(text.contains("error=Connection refused"));
-        
+
         println!("Text: {}", text);
     }
-    
+
     #[test]
     fn test_logger_filtering() {
         let logger = Logger::new(LogLevel::Warn, false);
-        
+
         // Should log
         logger.log(LogEntry::new(LogLevel::Error, "Error message"));
         logger.log(LogEntry::new(LogLevel::Warn, "Warning message"));
-        
+
         // Should not log (below min level)
         logger.log(LogEntry::new(LogLevel::Info, "Info message"));
         logger.log(LogEntry::new(LogLevel::Debug, "Debug message"));

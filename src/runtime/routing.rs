@@ -1,6 +1,6 @@
-use crate::envelope::Did;
 use crate::buffer::FixedMap;
-use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
+use crate::envelope::Did;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -44,7 +44,10 @@ impl RoutingTable {
     /// Update or add a route
     pub fn update_route(&self, did: Did, addr: SocketAddr) {
         if let Ok(mut routes) = self.routes.lock() {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64;
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_micros() as u64;
             let info = NeighborInfo {
                 addr,
                 last_seen_us: now,
@@ -55,14 +58,20 @@ impl RoutingTable {
 
     /// Resolve a DID to a socket address
     pub fn resolve(&self, did: &Did) -> Option<SocketAddr> {
-        self.routes.lock().ok().and_then(|r| r.get(did).map(|info| info.addr))
+        self.routes
+            .lock()
+            .ok()
+            .and_then(|r| r.get(did).map(|info| info.addr))
     }
 
     /// Gossip a list of known routes
     pub fn gossip_routes(&self) -> Vec<(Did, SocketAddr)> {
         let mut routes = Vec::new();
         if let Ok(r) = self.routes.lock() {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64;
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_micros() as u64;
             for (did, info) in r.iter() {
                 // Ignore extremely stale routes (> 30 seconds)
                 if now.saturating_sub(info.last_seen_us) < 30_000_000 {
@@ -74,7 +83,12 @@ impl RoutingTable {
     }
 
     /// Spawns a background Tokio task to broadcast known routes over UDP multicast.
-    pub fn start_gossip_task(self: Arc<Self>, interval_ms: u64, bind_addr: SocketAddr, broadcast_addr: SocketAddr) {
+    pub fn start_gossip_task(
+        self: Arc<Self>,
+        interval_ms: u64,
+        bind_addr: SocketAddr,
+        broadcast_addr: SocketAddr,
+    ) {
         let task = async move {
             let socket = match tokio::net::UdpSocket::bind(bind_addr).await {
                 Ok(s) => Arc::new(s),
@@ -83,9 +97,9 @@ impl RoutingTable {
                     return;
                 }
             };
-            
+
             socket.set_broadcast(true).unwrap_or_default();
-            
+
             // Spawn listener task
             let listen_socket = socket.clone();
             let table_clone = self.clone();
@@ -103,10 +117,10 @@ impl RoutingTable {
                             let mut did_bytes = [0u8; 32];
                             did_bytes.copy_from_slice(&buf[offset..offset + 32]);
                             offset += 32;
-                            
+
                             let ip_type = buf[offset];
                             offset += 1;
-                            
+
                             let addr = if ip_type == 4 && offset + 6 <= len {
                                 let mut ip_bytes = [0u8; 4];
                                 ip_bytes.copy_from_slice(&buf[offset..offset + 4]);
@@ -137,32 +151,35 @@ impl RoutingTable {
             });
 
             // Broadcast loop
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(interval_ms));
+            let mut interval =
+                tokio::time::interval(tokio::time::Duration::from_millis(interval_ms));
             loop {
                 interval.tick().await;
                 let routes = self.gossip_routes();
-                if routes.is_empty() { continue; }
-                
+                if routes.is_empty() {
+                    continue;
+                }
+
                 // Serialize routes into multiple MTU-safe packets.
                 // Each route entry is: [DID: 32] + [IP type: 1] + [IP: 4 or 16] + [Port: 2]
                 // IPv4 entry = 39 bytes, IPv6 entry = 51 bytes.
                 // We target max 1200 bytes per packet (safe for all networks including tunnels).
                 const MAX_PACKET_SIZE: usize = 1200;
-                
+
                 let mut packet = Vec::with_capacity(MAX_PACKET_SIZE);
-                
+
                 for (did, addr) in &routes {
                     let entry_size = match addr.ip() {
-                        IpAddr::V4(_) => 32 + 1 + 4 + 2, // 39 bytes
+                        IpAddr::V4(_) => 32 + 1 + 4 + 2,  // 39 bytes
                         IpAddr::V6(_) => 32 + 1 + 16 + 2, // 51 bytes
                     };
-                    
+
                     // If adding this entry would exceed the packet limit, send current packet first
                     if !packet.is_empty() && packet.len() + entry_size > MAX_PACKET_SIZE {
                         let _ = socket.send_to(&packet, broadcast_addr).await;
                         packet.clear();
                     }
-                    
+
                     // Serialize the entry
                     packet.extend_from_slice(&did.0);
                     match addr.ip() {
@@ -177,20 +194,23 @@ impl RoutingTable {
                     }
                     packet.extend_from_slice(&addr.port().to_be_bytes());
                 }
-                
+
                 // Send the final (possibly partial) packet
                 if !packet.is_empty() {
                     let _ = socket.send_to(&packet, broadcast_addr).await;
                 }
             }
         };
-            
+
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
             handle.spawn(task);
         } else {
             // We are in a sync context (e.g. cargo test), spawn a dedicated thread
             std::thread::spawn(move || {
-                if let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
                     rt.block_on(task);
                 }
             });

@@ -2,10 +2,10 @@ use crate::config::OmnimeshMode;
 use crate::config::modes::TransportType;
 use crate::envelope::{Did, SignedEnvelope};
 use crate::runtime::transport::config::TransportConfig;
+use crate::runtime::transport::interface::{DEFAULT_PAYLOAD_CAPACITY, Transport};
 use crate::runtime::transport::mock::MockTransport;
 use crate::runtime::transport::quic::QuicTransport;
 use crate::runtime::transport::tcp::TcpTransport;
-use crate::runtime::transport::interface::{Transport, DEFAULT_PAYLOAD_CAPACITY};
 
 /// Transport layer facade that provides a unified interface over different transport implementations.
 ///
@@ -37,10 +37,16 @@ impl TransportLayer {
         if !matches!(mode.transport_type(), TransportType::Mock) {
             let gossip_addr = config.tcp_listen_addr;
             let broadcast_addr: std::net::SocketAddr = "255.255.255.255:9999".parse().unwrap();
-            routing.clone().start_gossip_task(1000, gossip_addr, broadcast_addr);
+            routing
+                .clone()
+                .start_gossip_task(1000, gossip_addr, broadcast_addr);
         }
 
-        Ok(TransportLayer { transport, config, routing })
+        Ok(TransportLayer {
+            transport,
+            config,
+            routing,
+        })
     }
 
     /// Creates a transport layer and binds the Mock transport to `local_did`.
@@ -52,18 +58,26 @@ impl TransportLayer {
         let routing = std::sync::Arc::new(crate::runtime::RoutingTable::new());
 
         let transport: Box<dyn Transport> = match mode.transport_type() {
-            TransportType::Mock => Box::new(MockTransport::new(routing.clone()).with_did(local_did)),
-            TransportType::Tcp  => Box::new(TcpTransport::new(config.clone(), routing.clone())?),
+            TransportType::Mock => {
+                Box::new(MockTransport::new(routing.clone()).with_did(local_did))
+            }
+            TransportType::Tcp => Box::new(TcpTransport::new(config.clone(), routing.clone())?),
             TransportType::Quic => Box::new(QuicTransport::new(config.clone(), routing.clone())?),
         };
 
         if !matches!(mode.transport_type(), TransportType::Mock) {
             let gossip_addr = config.tcp_listen_addr;
             let broadcast_addr: std::net::SocketAddr = "255.255.255.255:9999".parse().unwrap();
-            routing.clone().start_gossip_task(1000, gossip_addr, broadcast_addr);
+            routing
+                .clone()
+                .start_gossip_task(1000, gossip_addr, broadcast_addr);
         }
 
-        Ok(TransportLayer { transport, config, routing })
+        Ok(TransportLayer {
+            transport,
+            config,
+            routing,
+        })
     }
 
     /// Creates a new transport layer with custom configuration.
@@ -91,10 +105,16 @@ impl TransportLayer {
         if !matches!(mode.transport_type(), TransportType::Mock) {
             let gossip_addr = config.tcp_listen_addr;
             let broadcast_addr: std::net::SocketAddr = "255.255.255.255:9999".parse().unwrap();
-            routing.clone().start_gossip_task(1000, gossip_addr, broadcast_addr);
+            routing
+                .clone()
+                .start_gossip_task(1000, gossip_addr, broadcast_addr);
         }
 
-        Ok(TransportLayer { transport, config, routing })
+        Ok(TransportLayer {
+            transport,
+            config,
+            routing,
+        })
     }
 
     /// Initializes the transport layer.

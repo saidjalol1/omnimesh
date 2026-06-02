@@ -26,9 +26,17 @@ pub enum TransportType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DidRegistryMode {
-    Direct { max_entries: usize },
-    Hierarchical { local_cache_size: usize, enable_discovery: bool },
-    OffChain { resolver_url: alloc::string::String, cache_ttl_seconds: u64 },
+    Direct {
+        max_entries: usize,
+    },
+    Hierarchical {
+        local_cache_size: usize,
+        enable_discovery: bool,
+    },
+    OffChain {
+        resolver_url: alloc::string::String,
+        cache_ttl_seconds: u64,
+    },
 }
 
 #[cfg(feature = "std")]
@@ -47,17 +55,17 @@ pub mod layer_kinds {
     pub const MOCK_TRANSPORT: &str = "mock transport";
     pub const TCP_TRANSPORT: &str = "tcp transport";
     pub const QUIC_TRANSPORT: &str = "quic transport";
-    
+
     // Security layer kinds
     pub const OPTIONAL_SECURITY: &str = "optional security";
     pub const MINIMAL_SECURITY: &str = "minimal security";
     pub const STANDARD_SECURITY: &str = "standard security";
-    
+
     // Storage layer kinds
     pub const DEVELOPMENT_STORAGE: &str = "development storage";
     pub const EPHEMERAL_STORAGE: &str = "ephemeral storage";
     pub const PERSISTENT_STORAGE: &str = "persistent storage";
-    
+
     // Delivery layer kinds
     pub const BEST_EFFORT_DELIVERY: &str = "best-effort delivery";
     pub const LIGHTWEIGHT_DELIVERY: &str = "lightweight delivery";
@@ -145,8 +153,6 @@ impl OmnimeshMode {
             dtn_path: Some("/tmp/omnimesh-dtn".into()),
         })
     }
-
-
 
     pub fn transport_type(&self) -> TransportType {
         match self {

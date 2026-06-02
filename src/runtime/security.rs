@@ -2,7 +2,7 @@ use crate::config::OmnimeshMode;
 use crate::config::modes::layer_kinds;
 use crate::envelope::{Did, SignedEnvelope};
 use crate::runtime::RuntimeLayer;
-use ed25519_dalek::{VerifyingKey, SigningKey, Signer};
+use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 
 pub trait HardwareSigner: Send + Sync + std::fmt::Debug {
     fn sign(&self, hash: &[u8; 32]) -> Result<[u8; 64], String>;
@@ -45,17 +45,21 @@ impl SecurityLayer {
             OmnimeshMode::Production(_) => (layer_kinds::STANDARD_SECURITY, true),
         };
 
-        SecurityLayer { kind, crypto_required, _signer: signer }
+        SecurityLayer {
+            kind,
+            crypto_required,
+            _signer: signer,
+        }
     }
 
-    pub fn verify<const N: usize>(
-        &self,
-        envelope: &SignedEnvelope<N>,
-    ) -> Result<(), String> {
+    pub fn verify<const N: usize>(&self, envelope: &SignedEnvelope<N>) -> Result<(), String> {
         let unsigned = envelope.signature.iter().all(|&b| b == 0);
         if unsigned {
             if self.crypto_required {
-                return Err(format!("security failure: unsigned envelope in {}", self.kind));
+                return Err(format!(
+                    "security failure: unsigned envelope in {}",
+                    self.kind
+                ));
             } else {
                 println!("Accepted unsigned envelope in {}", self.kind);
                 return Ok(());

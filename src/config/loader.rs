@@ -68,16 +68,30 @@ impl Default for NodeTransportConfig {
 
 impl NodeTransportConfig {
     /// Convert to runtime TransportConfig
-    pub fn to_transport_config(&self) -> Result<crate::runtime::transport::config::TransportConfig, String> {
-        let tcp_listen = self.tcp_listen_addr.parse()
+    pub fn to_transport_config(
+        &self,
+    ) -> Result<crate::runtime::transport::config::TransportConfig, String> {
+        let tcp_listen = self
+            .tcp_listen_addr
+            .parse()
             .map_err(|e| format!("Invalid tcp_listen_addr '{}': {}", self.tcp_listen_addr, e))?;
-        let tcp_connect = self.tcp_connect_addr.parse()
-            .map_err(|e| format!("Invalid tcp_connect_addr '{}': {}", self.tcp_connect_addr, e))?;
-        let quic_listen = self.quic_listen_addr.parse()
-            .map_err(|e| format!("Invalid quic_listen_addr '{}': {}", self.quic_listen_addr, e))?;
-        
+        let tcp_connect = self.tcp_connect_addr.parse().map_err(|e| {
+            format!(
+                "Invalid tcp_connect_addr '{}': {}",
+                self.tcp_connect_addr, e
+            )
+        })?;
+        let quic_listen = self.quic_listen_addr.parse().map_err(|e| {
+            format!(
+                "Invalid quic_listen_addr '{}': {}",
+                self.quic_listen_addr, e
+            )
+        })?;
+
         let mut config = crate::runtime::transport::config::TransportConfig::new(
-            tcp_listen, tcp_connect, quic_listen,
+            tcp_listen,
+            tcp_connect,
+            quic_listen,
         );
         config.max_read_buffer = self.max_read_buffer;
         Ok(config)
@@ -230,34 +244,73 @@ impl Default for WcetConfig {
 }
 
 // Serde default helpers
-fn default_true() -> bool { true }
-fn default_crypto_optional() -> String { "optional".into() }
-fn default_wcet_log() -> String { "log".into() }
-fn default_pool_size() -> usize { 1024 }
-fn default_buffer_capacity() -> usize { 8192 }
-fn default_light_pool() -> usize { 256 }
-fn default_light_capacity() -> usize { 1500 }
-fn default_32() -> usize { 32 }
-fn default_1024() -> usize { 1024 }
-fn default_1024_u64() -> u64 { 1024 }
-fn default_1000() -> u64 { 1000 }
-fn default_10000() -> u32 { 10000 }
-fn default_500() -> u64 { 500 }
-fn default_100() -> u64 { 100 }
-fn default_transport_type() -> String { "tcp".into() }
-fn default_tcp_listen() -> String { "0.0.0.0:9000".into() }
-fn default_tcp_connect() -> String { "127.0.0.1:9001".into() }
-fn default_quic_listen() -> String { "0.0.0.0:9443".into() }
-fn default_max_read_buffer() -> usize { 1048576 }
-fn default_gossip_bind() -> String { "0.0.0.0:9999".into() }
+fn default_true() -> bool {
+    true
+}
+fn default_crypto_optional() -> String {
+    "optional".into()
+}
+fn default_wcet_log() -> String {
+    "log".into()
+}
+fn default_pool_size() -> usize {
+    1024
+}
+fn default_buffer_capacity() -> usize {
+    8192
+}
+fn default_light_pool() -> usize {
+    256
+}
+fn default_light_capacity() -> usize {
+    1500
+}
+fn default_32() -> usize {
+    32
+}
+fn default_1024() -> usize {
+    1024
+}
+fn default_1024_u64() -> u64 {
+    1024
+}
+fn default_1000() -> u64 {
+    1000
+}
+fn default_10000() -> u32 {
+    10000
+}
+fn default_500() -> u64 {
+    500
+}
+fn default_100() -> u64 {
+    100
+}
+fn default_transport_type() -> String {
+    "tcp".into()
+}
+fn default_tcp_listen() -> String {
+    "0.0.0.0:9000".into()
+}
+fn default_tcp_connect() -> String {
+    "127.0.0.1:9001".into()
+}
+fn default_quic_listen() -> String {
+    "0.0.0.0:9443".into()
+}
+fn default_max_read_buffer() -> usize {
+    1048576
+}
+fn default_gossip_bind() -> String {
+    "0.0.0.0:9999".into()
+}
 
 impl ConfigFile {
     /// Load configuration from a TOML file.
     pub fn load(path: &Path) -> Result<Self, String> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
-        toml::from_str(&content)
-            .map_err(|e| format!("Failed to parse config: {}", e))
+        toml::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
     }
 
     /// Convert parsed config into an `OmnimeshMode`.
@@ -279,25 +332,21 @@ impl ConfigFile {
                     buffer_capacity: self.mode.development.buffer_capacity,
                 }))
             }
-            "lightweight" => {
-                Ok(OmnimeshMode::Lightweight(LightweightConfig {
-                    crypto_enabled: self.mode.lightweight.crypto_enabled,
-                    exactly_once_enabled: self.mode.lightweight.exactly_once,
-                    ordering_enabled: self.mode.lightweight.ordering,
-                    buffer_pool_size: self.mode.lightweight.buffer_pool_size,
-                    buffer_capacity: self.mode.lightweight.buffer_capacity,
-                    no_std: self.mode.lightweight.no_std,
-                }))
-            }
-            "production" => {
-                Ok(OmnimeshMode::Production(ProductionConfig {
-                    crypto_enabled: self.mode.production.crypto_enabled,
-                    exactly_once_enabled: self.mode.production.exactly_once,
-                    ordering_enabled: self.mode.production.ordering,
-                    dtn_enabled: self.mode.production.dtn_enabled,
-                    dtn_path: self.mode.production.dtn_path.as_ref().map(|s| s.into()),
-                }))
-            }
+            "lightweight" => Ok(OmnimeshMode::Lightweight(LightweightConfig {
+                crypto_enabled: self.mode.lightweight.crypto_enabled,
+                exactly_once_enabled: self.mode.lightweight.exactly_once,
+                ordering_enabled: self.mode.lightweight.ordering,
+                buffer_pool_size: self.mode.lightweight.buffer_pool_size,
+                buffer_capacity: self.mode.lightweight.buffer_capacity,
+                no_std: self.mode.lightweight.no_std,
+            })),
+            "production" => Ok(OmnimeshMode::Production(ProductionConfig {
+                crypto_enabled: self.mode.production.crypto_enabled,
+                exactly_once_enabled: self.mode.production.exactly_once,
+                ordering_enabled: self.mode.production.ordering,
+                dtn_enabled: self.mode.production.dtn_enabled,
+                dtn_path: self.mode.production.dtn_path.as_ref().map(|s| s.into()),
+            })),
             other => Err(format!("Unknown mode: {}", other)),
         }
     }
@@ -305,11 +354,12 @@ impl ConfigFile {
     /// Convert parsed config into the full runtime configuration.
     pub fn to_runtime_config(&self) -> Result<crate::config::modes::OmniMeshConfig, String> {
         let mode = self.to_mode()?;
-        
+
         // Parse Listen Addresses
         let mut listen_addresses = Vec::new();
         for addr_str in &self.node.listen_addresses {
-            let addr = addr_str.parse::<std::net::SocketAddr>()
+            let addr = addr_str
+                .parse::<std::net::SocketAddr>()
                 .map_err(|e| format!("Invalid listen address '{}': {}", addr_str, e))?;
             listen_addresses.push(addr);
         }
@@ -335,7 +385,7 @@ impl ConfigFile {
             bytes[..len].copy_from_slice(&id_bytes[..len]);
             known_peers.push(crate::envelope::Did(bytes));
         }
-        
+
         let dtn_path = match &mode {
             OmnimeshMode::Production(p) => p.dtn_path.clone(),
             _ => None,

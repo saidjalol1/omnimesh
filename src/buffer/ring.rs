@@ -29,9 +29,10 @@ impl<T: Copy, const N: usize> RingBuffer<T, N> {
     {
         for item in self.data.iter() {
             if let Some(val) = item
-                && predicate(val) {
-                    return true;
-                }
+                && predicate(val)
+            {
+                return true;
+            }
         }
         false
     }

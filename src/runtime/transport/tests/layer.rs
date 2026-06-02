@@ -2,16 +2,16 @@
 
 #![allow(unused_imports)]
 
+use super::helpers::{assert_transport_kind, create_and_initialize_transport};
 use crate::config::OmnimeshMode;
 use crate::runtime::transport::TransportLayer;
-use super::helpers::{assert_transport_kind, create_and_initialize_transport};
 
 #[test]
 fn transport_receive_returns_valid_envelope() {
     use crate::envelope::Did;
     use crate::runtime::transport::common::TransportUtils;
-    let transport = TransportLayer::new(&OmnimeshMode::development())
-        .expect("transport creation failed");
+    let transport =
+        TransportLayer::new(&OmnimeshMode::development()).expect("transport creation failed");
 
     // Send a sample envelope into the bus first
     // Default MockTransport uses [0u8; 32] as its DID
@@ -36,8 +36,8 @@ fn transport_layer_kind_matches_mode() {
 fn transport_send_succeeds_with_mock() {
     use crate::envelope::Did;
     use crate::runtime::transport::common::TransportUtils;
-    let transport = TransportLayer::new(&OmnimeshMode::development())
-        .expect("transport creation failed");
+    let transport =
+        TransportLayer::new(&OmnimeshMode::development()).expect("transport creation failed");
 
     // Default MockTransport uses [0u8; 32] as its DID
     let local_did = Did([0u8; 32]);
@@ -52,8 +52,8 @@ fn transport_send_succeeds_with_mock() {
 
 #[test]
 fn transport_send_succeeds_with_tcp() {
-    let transport = TransportLayer::new(&OmnimeshMode::lightweight())
-        .expect("transport creation failed");
+    let transport =
+        TransportLayer::new(&OmnimeshMode::lightweight()).expect("transport creation failed");
     let envelope = crate::runtime::transport::common::TransportUtils::sample_envelope();
 
     let result = transport.send(&envelope);
@@ -63,8 +63,8 @@ fn transport_send_succeeds_with_tcp() {
 
 #[test]
 fn transport_initialize_succeeds() {
-    let transport = TransportLayer::new(&OmnimeshMode::development())
-        .expect("transport creation failed");
+    let transport =
+        TransportLayer::new(&OmnimeshMode::development()).expect("transport creation failed");
     let result = transport.initialize();
     assert!(result.is_ok());
 }
@@ -88,7 +88,7 @@ fn transport_layer_production_uses_tcp() {
 #[test]
 fn transport_layer_with_custom_config() {
     use crate::runtime::transport::TransportConfig;
-    
+
     let mode = OmnimeshMode::lightweight();
     let config = TransportConfig::new(
         "127.0.0.1:9001".parse().unwrap(),

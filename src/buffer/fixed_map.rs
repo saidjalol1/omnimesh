@@ -22,19 +22,17 @@ impl<K: Copy + PartialEq, V: Copy, const N: usize> FixedMap<K, V, N> {
             Ok(arr) => arr,
             Err(_) => unreachable!("Vec length matches N"),
         };
-        
-        Self {
-            entries,
-            count: 0,
-        }
+
+        Self { entries, count: 0 }
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
         for entry in self.entries.iter() {
             if let Some((k, v)) = entry
-                && k == key {
-                    return Some(v);
-                }
+                && k == key
+            {
+                return Some(v);
+            }
         }
         None
     }
@@ -42,9 +40,10 @@ impl<K: Copy + PartialEq, V: Copy, const N: usize> FixedMap<K, V, N> {
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
         for entry in self.entries.iter_mut() {
             if let Some((k, v)) = entry
-                && k == key {
-                    return Some(v);
-                }
+                && k == key
+            {
+                return Some(v);
+            }
         }
         None
     }
@@ -53,11 +52,12 @@ impl<K: Copy + PartialEq, V: Copy, const N: usize> FixedMap<K, V, N> {
         // Update if exists
         for entry in self.entries.iter_mut() {
             if let Some((k, v)) = entry
-                && *k == key {
-                    let old = *v;
-                    *v = value;
-                    return Ok(Some(old));
-                }
+                && *k == key
+            {
+                let old = *v;
+                *v = value;
+                return Ok(Some(old));
+            }
         }
 
         // Find empty slot
@@ -75,12 +75,13 @@ impl<K: Copy + PartialEq, V: Copy, const N: usize> FixedMap<K, V, N> {
     pub fn remove(&mut self, key: &K) -> Option<V> {
         for entry in self.entries.iter_mut() {
             if let Some((k, v)) = entry
-                && k == key {
-                    let val = *v;
-                    *entry = None;
-                    self.count -= 1;
-                    return Some(val);
-                }
+                && k == key
+            {
+                let val = *v;
+                *entry = None;
+                self.count -= 1;
+                return Some(val);
+            }
         }
         None
     }

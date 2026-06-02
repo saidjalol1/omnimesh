@@ -29,4 +29,4 @@ pub use envelope::{Did, EnvelopeHeader, MessageId, PayloadType, Priority, Signed
 pub use runtime::run;
 
 #[cfg(feature = "std")]
-pub use client::{OmnimeshClient, ClientConfig, ReceivedMessage, ClientHealth};
+pub use client::{ClientConfig, ClientHealth, OmnimeshClient, ReceivedMessage};
