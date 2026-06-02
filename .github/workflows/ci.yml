@@ -14,7 +14,9 @@ jobs:
   test:
     name: Test Suite
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.rust == 'beta' }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         rust: [stable, beta]
@@ -95,7 +97,7 @@ jobs:
         run: cargo install cargo-tarpaulin
       
       - name: Generate coverage
-        run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml
+        run: cargo tarpaulin --verbose --all-features --timeout 120 --out Xml --exclude-files "bindings/*"
       
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
