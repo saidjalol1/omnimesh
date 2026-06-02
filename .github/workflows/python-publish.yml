@@ -30,37 +30,17 @@ jobs:
         run: pip install maturin
 
       - name: Build wheels
-        working-directory: bindings/python
-        run: maturin build --release --strip --out dist
+        run: maturin build --release --strip --out dist --manifest-path bindings/python/Cargo.toml
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}
-          path: bindings/python/dist/*.whl
-
-  build-sdist:
-    name: Build source distribution
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install maturin
-        run: pip install maturin
-
-      - name: Build sdist
-        working-directory: bindings/python
-        run: maturin sdist --out dist
-
-      - name: Upload sdist
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdist
-          path: bindings/python/dist/*.tar.gz
+          path: dist/*.whl
 
   publish:
     name: Publish to PyPI
-    needs: [build-wheels, build-sdist]
+    needs: [build-wheels]
     runs-on: ubuntu-latest
     environment:
       name: pypi
