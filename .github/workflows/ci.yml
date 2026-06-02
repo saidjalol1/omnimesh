@@ -47,13 +47,13 @@ jobs:
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Run tests
-        run: cargo test --verbose --all-features
+        run: cargo test --verbose --all-features -p omnimesh
       
       - name: Run tests (no default features)
-        run: cargo test --verbose --no-default-features
+        run: cargo test --verbose --no-default-features -p omnimesh
       
       - name: Run doc tests
-        run: cargo test --doc --verbose
+        run: cargo test --doc --verbose -p omnimesh
 
   lint:
     name: Linting
@@ -97,7 +97,7 @@ jobs:
         run: cargo install cargo-tarpaulin
       
       - name: Generate coverage
-        run: cargo tarpaulin --verbose --all-features --timeout 120 --out Xml --exclude-files "bindings/*"
+        run: cargo tarpaulin --verbose --all-features --timeout 120 --out Xml -p omnimesh
       
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
