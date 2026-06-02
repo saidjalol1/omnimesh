@@ -45,16 +45,19 @@ impl Client {
     ///
     /// Args:
     ///     mode: "development" (default), "lightweight", or "production"
+    ///     listen_port: Custom TCP port to listen on (required for lightweight/production cross-process)
     ///
     /// Returns:
     ///     A new Client instance with a unique cryptographic identity.
     #[new]
-    #[pyo3(signature = (mode="development"))]
-    fn new(mode: &str) -> PyResult<Self> {
-        let config = match mode {
-            "development" => ClientConfig::development(),
-            "lightweight" => ClientConfig::lightweight(),
-            "production"  => ClientConfig::production(),
+    #[pyo3(signature = (mode="development", listen_port=None))]
+    fn new(mode: &str, listen_port: Option<u16>) -> PyResult<Self> {
+        let config = match (mode, listen_port) {
+            ("development", _) => ClientConfig::development(),
+            ("lightweight", Some(port)) => ClientConfig::lightweight_on_port(port),
+            ("lightweight", None) => ClientConfig::lightweight(),
+            ("production", Some(port)) => ClientConfig::production_on_port(port),
+            ("production", None) => ClientConfig::production(),
             _ => return Err(PyValueError::new_err(
                 "mode must be 'development', 'lightweight', or 'production'"
             )),
@@ -70,6 +73,20 @@ impl Client {
     #[getter]
     fn did(&self) -> String {
         hex::encode(self.inner.did.0)
+    }
+
+    /// Register a peer's DID and network address for routing.
+    ///
+    /// This tells the client where to send messages for a given DID.
+    /// Required for cross-process and cross-machine communication.
+    ///
+    /// Args:
+    ///     did_hex: 64-char hex string of the peer's DID
+    ///     addr: IP:port string (e.g. "127.0.0.1:9001")
+    fn register_peer(&self, did_hex: &str, addr: &str) -> PyResult<()> {
+        let did = parse_did(did_hex)?;
+        self.inner.register_peer(did, addr)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// Send an AgentCommand payload to another node.
@@ -264,7 +281,7 @@ impl Client {
 
 /// The `omnimesh` Python module.
 #[pymodule]
-fn omnimesh_py(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn omnimesh(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Client>()?;
     Ok(())
 }

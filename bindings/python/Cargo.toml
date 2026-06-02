@@ -1,10 +1,12 @@
 [package]
 name = "omnimesh-py"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
+description = "Python bindings for OMNI-MESH mesh networking middleware"
+license = "MIT"
 
 [lib]
-name = "omnimesh_py"
+name = "omnimesh"
 crate-type = ["cdylib"]
 
 [dependencies]

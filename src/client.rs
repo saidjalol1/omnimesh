@@ -62,6 +62,8 @@ pub struct ClientConfig {
     pub mode: OmnimeshMode,
     /// How many received messages to buffer before dropping (back-pressure)
     pub receive_buffer_capacity: usize,
+    /// Custom TCP listen port (None = use default 9000)
+    pub listen_port: Option<u16>,
 }
 
 impl Default for ClientConfig {
@@ -69,6 +71,7 @@ impl Default for ClientConfig {
         Self {
             mode: OmnimeshMode::development(),
             receive_buffer_capacity: 1024,
+            listen_port: None,
         }
     }
 }
@@ -82,8 +85,16 @@ impl ClientConfig {
         Self { mode: OmnimeshMode::lightweight(), ..Default::default() }
     }
 
+    pub fn lightweight_on_port(port: u16) -> Self {
+        Self { mode: OmnimeshMode::lightweight(), listen_port: Some(port), ..Default::default() }
+    }
+
     pub fn production() -> Self {
         Self { mode: OmnimeshMode::production(), ..Default::default() }
+    }
+
+    pub fn production_on_port(port: u16) -> Self {
+        Self { mode: OmnimeshMode::production(), listen_port: Some(port), ..Default::default() }
     }
 }
 
@@ -153,8 +164,23 @@ impl OmnimeshClient {
     fn new(config: ClientConfig, signing_key: SigningKey) -> Result<Self, String> {
         let did = Did::new(signing_key.verifying_key().to_bytes());
         let routing = Arc::new(RoutingTable::new());
-        // Use new_with_did so mock transport only pulls messages for this DID
-        let transport = Arc::new(TransportLayer::new_with_did(&config.mode, did)?);
+
+        // Create transport with custom config if a listen_port is specified
+        // IMPORTANT: share the routing table so register_peer() works
+        let transport = if let Some(port) = config.listen_port {
+            use crate::runtime::transport::TransportConfig;
+            let listen_addr = format!("127.0.0.1:{}", port).parse().unwrap();
+            let transport_config = TransportConfig::new(
+                listen_addr,
+                listen_addr, // connect_addr same as listen for single-machine
+                format!("127.0.0.1:{}", port + 443).parse().unwrap(),
+            );
+            Arc::new(TransportLayer::with_config_and_routing(&config.mode, transport_config, routing.clone())?)
+        } else {
+            // Use new_with_did so mock transport only pulls messages for this DID
+            Arc::new(TransportLayer::new_with_did(&config.mode, did)?)
+        };
+
         let security = Arc::new(SecurityLayer::new(&config.mode, None));
         let inbox = Arc::new(Mutex::new(VecDeque::new()));
         let inbox_notify = Arc::new(Condvar::new());

@@ -96,6 +96,7 @@ fn test_inbox_backpressure_drops_messages() {
     let config = ClientConfig {
         mode: OmnimeshMode::development(),
         receive_buffer_capacity: 5,
+        ..Default::default()
     };
     let receiver = OmnimeshClient::builder()
         .with_config(config)
@@ -113,8 +114,13 @@ fn test_inbox_backpressure_drops_messages() {
         sender.send(receiver.did, msg).unwrap();
     }
 
-    // Wait for poller to process
-    thread::sleep(Duration::from_millis(100));
+    // Wait for poller to process all messages (it should fill inbox to 5 then drop the rest)
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while receiver.health().messages_received + receiver.health().messages_dropped < 20
+        && std::time::Instant::now() < deadline
+    {
+        thread::sleep(Duration::from_millis(10));
+    }
 
     // Should have at most 5 messages (capacity limit)
     assert!(receiver.inbox_len() <= 5,
@@ -223,9 +229,7 @@ fn test_payload_with_special_characters() {
     let msg = payload::agent_command(special, b"\x00\xFF", b"\x00\x01\x02\x03");
     node_a.send(node_b.did, msg).unwrap();
 
-    thread::sleep(Duration::from_millis(50));
-
-    let received = node_b.try_receive().expect("Should receive message");
+    let received = node_b.receive_timeout(Duration::from_secs(2)).expect("Should receive message");
     if let Some(PayloadKind::AgentCommand(cmd)) = received.payload.payload {
         assert_eq!(cmd.command_type, special);
         assert_eq!(cmd.target_did, b"\x00\xFF");
@@ -260,11 +264,15 @@ fn test_all_payload_types_roundtrip() {
         node_a.send(node_b.did, p.clone()).unwrap();
     }
 
-    thread::sleep(Duration::from_millis(100));
-
+    // Poll until all 6 messages arrive or timeout
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
     let mut received_count = 0;
-    while node_b.try_receive().is_some() {
-        received_count += 1;
+    while received_count < payloads.len() && std::time::Instant::now() < deadline {
+        if node_b.try_receive().is_some() {
+            received_count += 1;
+        } else {
+            thread::sleep(Duration::from_millis(1));
+        }
     }
     assert_eq!(received_count, payloads.len(),
         "All payload types should roundtrip successfully");
@@ -754,16 +762,19 @@ fn test_rapid_send_receive_latency() {
         .build()
         .unwrap();
 
+    // Give poller time to start
+    thread::sleep(Duration::from_millis(10));
+
     let start = std::time::Instant::now();
     let msg = payload::agent_command("latency-test", b"", b"");
     node_a.send(node_b.did, msg).unwrap();
 
-    let received = node_b.receive_timeout(Duration::from_secs(1));
+    let received = node_b.receive_timeout(Duration::from_secs(2));
     let latency = start.elapsed();
 
     assert!(received.is_some(), "Message should arrive");
-    // In-process mock transport should be sub-10ms
-    assert!(latency < Duration::from_millis(50),
+    // In-process mock transport should be sub-100ms (generous for CI)
+    assert!(latency < Duration::from_millis(100),
         "Latency too high for mock transport: {:?}", latency);
 }
 

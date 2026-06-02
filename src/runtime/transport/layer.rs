@@ -71,6 +71,17 @@ impl TransportLayer {
     /// This allows overriding the default network configuration for specific deployments.
     pub fn with_config(mode: &OmnimeshMode, config: TransportConfig) -> Result<Self, String> {
         let routing = std::sync::Arc::new(crate::runtime::RoutingTable::new());
+        Self::with_config_and_routing(mode, config, routing)
+    }
+
+    /// Creates a new transport layer with custom config and an external routing table.
+    ///
+    /// Use this when you need the transport to share a routing table with the client SDK.
+    pub fn with_config_and_routing(
+        mode: &OmnimeshMode,
+        config: TransportConfig,
+        routing: std::sync::Arc<crate::runtime::RoutingTable>,
+    ) -> Result<Self, String> {
         let transport: Box<dyn Transport> = match mode.transport_type() {
             TransportType::Mock => Box::new(MockTransport::new(routing.clone())),
             TransportType::Tcp => Box::new(TcpTransport::new(config.clone(), routing.clone())?),

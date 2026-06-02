@@ -138,8 +138,14 @@ impl TcpTransport {
                             if let Some(stream) = pool_guard.get_mut(req.addr) {
                                 let mut buf = [0u8; 2048];
                                 if let Ok(len) = req.envelope.serialize_into(&mut buf) {
-                                    match stream.write_all(&buf[..len]).await {
+                                    // Write 4-byte length prefix + payload
+                                    let len_bytes = (len as u32).to_be_bytes();
+                                    let mut frame = Vec::with_capacity(4 + len);
+                                    frame.extend_from_slice(&len_bytes);
+                                    frame.extend_from_slice(&buf[..len]);
+                                    match stream.write_all(&frame).await {
                                         Ok(_) => {
+                                            let _ = stream.flush().await;
                                             stats_guard.messages_sent += 1;
                                             break;
                                         }
@@ -192,34 +198,36 @@ impl TcpTransport {
                                 let stats = stats_clone.clone();
                                 
                                 tokio::spawn(async move {
-                                    let mut buf = [0u8; 2048];
-                                    const MAX_READS_PER_CYCLE: usize = 16;
+                                    let mut len_buf = [0u8; 4];
+                                    let mut msg_buf = [0u8; 2048];
                                     
                                     'connection: loop {
-                                        for _ in 0..MAX_READS_PER_CYCLE {
-                                            match socket.read(&mut buf).await {
-                                                Ok(n) if n > 0 => {
-                                                    match SignedEnvelope::deserialize(&buf[..n]) {
-                                                        Ok(envelope) => {
-                                                            if tx.send(envelope).is_ok() {
-                                                                let mut stats_guard = stats.lock().await;
-                                                                stats_guard.messages_received += 1;
-                                                            } else {
-                                                                logging::error_queue_failed();
-                                                                break 'connection;
-                                                            }
-                                                        }
-                                                        Err(e) => logging::error_deserialization(e),
-                                                    }
-                                                }
-                                                Ok(_) => break 'connection,
-                                                Err(e) => {
-                                                    logging::error_read(e);
+                                        // Read 4-byte length prefix
+                                        if let Err(e) = socket.read_exact(&mut len_buf).await {
+                                            logging::error_read(e);
+                                            break 'connection;
+                                        }
+                                        let msg_len = u32::from_be_bytes(len_buf) as usize;
+                                        if msg_len == 0 || msg_len > msg_buf.len() {
+                                            break 'connection;
+                                        }
+                                        // Read exact message bytes
+                                        if let Err(e) = socket.read_exact(&mut msg_buf[..msg_len]).await {
+                                            logging::error_read(e);
+                                            break 'connection;
+                                        }
+                                        match SignedEnvelope::deserialize(&msg_buf[..msg_len]) {
+                                            Ok(envelope) => {
+                                                if tx.send(envelope).is_ok() {
+                                                    let mut stats_guard = stats.lock().await;
+                                                    stats_guard.messages_received += 1;
+                                                } else {
+                                                    logging::error_queue_failed();
                                                     break 'connection;
                                                 }
                                             }
+                                            Err(e) => logging::error_deserialization(e),
                                         }
-                                        tokio::task::yield_now().await;
                                     }
                                 });
                             }

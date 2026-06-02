@@ -1,0 +1,40 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "omnimesh"
+version = "1.0.0"
+description = "Zero-allocation mesh networking middleware for autonomous robot fleets, edge-AI swarms, and multi-agent systems"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Saidjalol", email = "saidjalolturakhujayev@gmail.com"}]
+requires-python = ">=3.8"
+keywords = ["robotics", "mesh-networking", "edge-ai", "p2p", "iot", "ros2"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Networking",
+]
+
+[project.urls]
+Homepage = "https://github.com/saidjalol1/omnimesh"
+Repository = "https://github.com/saidjalol1/omnimesh"
+Documentation = "https://docs.rs/omnimesh"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "omnimesh"
+exclude = ["target/**", ".venv/**", "__pycache__/**"]

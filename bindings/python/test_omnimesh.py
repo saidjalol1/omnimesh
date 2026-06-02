@@ -15,7 +15,7 @@ Or run with pytest:
 
 import time
 import threading
-import omnimesh_py as omnimesh
+import omnimesh
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
