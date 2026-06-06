@@ -1,6 +1,6 @@
 [package]
 name = "omnimesh"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 authors = ["Saidjalol <saidjalolturakhujayev@gmail.com>"]
 description = "Zero-allocation mesh networking middleware for autonomous robot fleets, edge-AI swarms, and multi-agent systems"
