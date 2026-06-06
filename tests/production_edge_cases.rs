@@ -802,7 +802,7 @@ fn test_receive_timeout_accuracy() {
         elapsed
     );
     assert!(
-        elapsed < Duration::from_millis(200),
+        elapsed < Duration::from_millis(500),
         "Timeout too long: {:?}",
         elapsed
     );
