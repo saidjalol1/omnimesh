@@ -89,7 +89,11 @@ fn test_client_drain_after_shutdown() {
     while node_b.try_receive().is_some() {
         drained += 1;
     }
-    assert!(drained >= 4, "Should drain most messages after shutdown, got {}", drained);
+    assert!(
+        drained >= 4,
+        "Should drain most messages after shutdown, got {}",
+        drained
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -414,7 +418,11 @@ fn test_concurrent_send_and_receive() {
     while node_a.try_receive().is_some() {
         echoes += 1;
     }
-    assert!(echoes >= 60, "A should receive most echoes, got {}/100", echoes);
+    assert!(
+        echoes >= 60,
+        "A should receive most echoes, got {}/100",
+        echoes
+    );
 }
 
 #[test]

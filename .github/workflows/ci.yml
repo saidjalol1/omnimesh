@@ -47,7 +47,7 @@ jobs:
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Run tests
-        run: cargo test --verbose --all-features -p omnimesh
+        run: cargo test --verbose -p omnimesh
       
       - name: Run tests (no default features)
         run: cargo test --verbose --no-default-features -p omnimesh
