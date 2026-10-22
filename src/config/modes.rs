@@ -65,9 +65,9 @@ impl OmniMeshConfig {
     /// Build a minimal `OmniMeshConfig` from a mode, using built-in defaults
     /// for all network addresses.  Useful when no TOML config file is present.
     pub fn from_mode(mode: OmnimeshMode) -> Self {
+        use crate::envelope::Did;
         use ed25519_dalek::SigningKey;
         use rand_core::OsRng;
-        use crate::envelope::Did;
 
         let signing_key = SigningKey::generate(&mut OsRng);
         let node_id = Did::new(signing_key.verifying_key().to_bytes());

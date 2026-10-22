@@ -22,8 +22,8 @@ pub mod runtime;
 pub mod client;
 
 pub use buffer::{PayloadError, PayloadStorage, SafetyBufferPool};
-pub use config::{CryptoMode, OmnimeshMode, PersistenceMode, WcetMode};
 pub use config::modes::OmniMeshConfig;
+pub use config::{CryptoMode, OmnimeshMode, PersistenceMode, WcetMode};
 pub use envelope::{Did, EnvelopeHeader, MessageId, PayloadType, Priority, SignedEnvelope};
 
 #[cfg(feature = "std")]

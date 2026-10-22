@@ -402,7 +402,12 @@ impl ConfigFile {
             .routing
             .gossip_bind_addr
             .parse::<std::net::SocketAddr>()
-            .map_err(|e| format!("Invalid gossip_bind_addr '{}': {}", self.routing.gossip_bind_addr, e))?;
+            .map_err(|e| {
+                format!(
+                    "Invalid gossip_bind_addr '{}': {}",
+                    self.routing.gossip_bind_addr, e
+                )
+            })?;
 
         // Parse multicast address from [routing] (fall back to default if not set)
         let multicast_addr = self

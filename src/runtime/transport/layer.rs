@@ -37,9 +37,11 @@ impl TransportLayer {
         if !matches!(mode.transport_type(), TransportType::Mock) {
             let gossip_addr = config.gossip_bind_addr;
             let broadcast_addr = config.multicast_addr;
-            routing
-                .clone()
-                .start_gossip_task(config.gossip_interval_ms, gossip_addr, broadcast_addr);
+            routing.clone().start_gossip_task(
+                config.gossip_interval_ms,
+                gossip_addr,
+                broadcast_addr,
+            );
         }
 
         Ok(TransportLayer {
@@ -68,9 +70,11 @@ impl TransportLayer {
         if !matches!(mode.transport_type(), TransportType::Mock) {
             let gossip_addr = config.gossip_bind_addr;
             let broadcast_addr = config.multicast_addr;
-            routing
-                .clone()
-                .start_gossip_task(config.gossip_interval_ms, gossip_addr, broadcast_addr);
+            routing.clone().start_gossip_task(
+                config.gossip_interval_ms,
+                gossip_addr,
+                broadcast_addr,
+            );
         }
 
         Ok(TransportLayer {
@@ -105,9 +109,11 @@ impl TransportLayer {
         if !matches!(mode.transport_type(), TransportType::Mock) {
             let gossip_addr = config.gossip_bind_addr;
             let broadcast_addr = config.multicast_addr;
-            routing
-                .clone()
-                .start_gossip_task(config.gossip_interval_ms, gossip_addr, broadcast_addr);
+            routing.clone().start_gossip_task(
+                config.gossip_interval_ms,
+                gossip_addr,
+                broadcast_addr,
+            );
         }
 
         Ok(TransportLayer {
@@ -139,9 +145,11 @@ impl TransportLayer {
         if !matches!(mode.transport_type(), TransportType::Mock) {
             let gossip_addr = config.gossip_bind_addr;
             let broadcast_addr = config.multicast_addr;
-            routing
-                .clone()
-                .start_gossip_task(config.gossip_interval_ms, gossip_addr, broadcast_addr);
+            routing.clone().start_gossip_task(
+                config.gossip_interval_ms,
+                gossip_addr,
+                broadcast_addr,
+            );
         }
 
         Ok(TransportLayer {

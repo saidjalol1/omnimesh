@@ -6,8 +6,8 @@ use crate::runtime::delivery::DeliveryLayer;
 use crate::runtime::logging::{LogEntry, LogLevel, Logger};
 use crate::runtime::security::SecurityLayer;
 use crate::runtime::storage::StorageLayer;
-use crate::runtime::transport::TransportLayer;
 use crate::runtime::transport::TransportConfig;
+use crate::runtime::transport::TransportLayer;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 

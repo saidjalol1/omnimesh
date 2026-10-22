@@ -98,7 +98,7 @@ impl TransportUtils {
         let _ = payload.push_bytes(b"hello omnimesh");
 
         let header = EnvelopeHeader::new(
-            PROTOCOL_VERSION,             // version
+            PROTOCOL_VERSION,           // version
             MessageId::new([0x01; 16]), // message id
             Did::new([0x02; 32]),       // sender
             Did::new([0x03; 32]),       // recipient

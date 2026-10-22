@@ -40,11 +40,7 @@ impl RawEnvelopeHeader {
         // struct pointers directly causes SIGBUS on ARMv7 (32-bit Android).
         let mut raw = core::mem::MaybeUninit::<Self>::uninit();
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                buf.as_ptr(),
-                raw.as_mut_ptr() as *mut u8,
-                Self::SIZE,
-            );
+            core::ptr::copy_nonoverlapping(buf.as_ptr(), raw.as_mut_ptr() as *mut u8, Self::SIZE);
             Ok(raw.assume_init())
         }
     }
