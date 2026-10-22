@@ -88,13 +88,7 @@ fn bench_signature_generation(c: &mut Criterion) {
     group.throughput(Throughput::Elements(1));
 
     group.bench_function("sign_envelope", |b| {
-        b.iter(|| {
-            black_box(SignedEnvelope::sign(
-                header,
-                payload_buf.clone(),
-                &signing_key,
-            ))
-        });
+        b.iter(|| black_box(SignedEnvelope::sign(header, payload_buf, &signing_key)));
     });
 
     group.finish();

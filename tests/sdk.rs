@@ -18,7 +18,7 @@ fn sdk_client_builds_successfully() {
         .expect("Client should build");
 
     println!("Client created: {:?}", client);
-    println!("Node DID (hex): {}", hex::encode(&client.did.0));
+    println!("Node DID (hex): {}", hex::encode(client.did.0));
     assert_ne!(client.did.0, [0u8; 32], "DID must not be all zeros");
 }
 

@@ -51,6 +51,6 @@ fn all_modes_initialize_successfully() {
 
     for mode in modes {
         let _transport = create_and_initialize_transport(&mode)
-            .expect(&format!("transport initialization failed for {:?}", mode));
+            .unwrap_or_else(|_| panic!("transport initialization failed for {:?}", mode));
     }
 }

@@ -81,10 +81,8 @@ impl Node {
 
     fn receive_and_verify(&self) -> Option<Vec<u8>> {
         if let Some(envelope) = self.transport.receive() {
-            if self.security.verify(&envelope).is_ok() {
-                if self.delivery.deliver(&envelope).is_ok() {
-                    return Some(envelope.payload.as_slice().to_vec());
-                }
+            if self.security.verify(&envelope).is_ok() && self.delivery.deliver(&envelope).is_ok() {
+                return Some(envelope.payload.as_slice().to_vec());
             }
         }
         None

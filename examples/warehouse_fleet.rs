@@ -43,7 +43,7 @@ fn main() {
 
     // Coordinator assigns tasks
     println!("=== Task Assignment Phase ===\n");
-    let tasks = vec![("pick", "A-12"), ("transport", "B-05"), ("place", "C-18")];
+    let tasks = [("pick", "A-12"), ("transport", "B-05"), ("place", "C-18")];
 
     for (i, (id, robot)) in robots.iter().enumerate() {
         let (task, location) = tasks[i];

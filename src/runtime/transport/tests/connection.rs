@@ -58,12 +58,12 @@ fn all_transports_initialize_without_panic() {
     ];
 
     for mode in modes {
-        let transport =
-            TransportLayer::new(&mode).expect(&format!("transport creation failed for {:?}", mode));
+        let transport = TransportLayer::new(&mode)
+            .unwrap_or_else(|_| panic!("transport creation failed for {:?}", mode));
 
         transport
             .initialize()
-            .expect(&format!("initialization failed for {:?}", mode));
+            .unwrap_or_else(|_| panic!("initialization failed for {:?}", mode));
     }
 }
 

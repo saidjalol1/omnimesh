@@ -86,9 +86,7 @@ fn end_to_end_sign_verify_deliver_store() {
         .unwrap();
     let envelope_1024 = SignedEnvelope::new(envelope.header, payload_1024, envelope.signature);
 
-    storage
-        .store(envelope_1024.clone())
-        .expect("storage must succeed");
+    storage.store(envelope_1024).expect("storage must succeed");
     assert_eq!(storage.stored_count(), 1);
 
     // --- 5. Decode the payload back ---

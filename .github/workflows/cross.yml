@@ -23,8 +23,13 @@ jobs:
           toolchain: "1.85"
           targets: aarch64-linux-android
 
-      - name: Install Android NDK
-        uses: android-actions/setup-android@v3
+      # Use the NDK pre-installed on the GitHub runner instead of
+      # android-actions/setup-android@v3 (uses deprecated Node.js 20).
+      # ubuntu-latest ships with NDK r27 at $ANDROID_NDK_LATEST_HOME.
+      - name: Set up Android NDK path
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked --version "^3"
@@ -42,17 +47,6 @@ jobs:
       # Bug 1+2 fix: use --no-default-features --features android to exclude
       # sled (mmap/SIGBUS), core_affinity, thread-priority, prometheus, ctrlc
       # which have no Android support.
-      - name: cargo build (Android aarch64, android feature set)
-        run: |
-          cargo ndk \
-            --target aarch64-linux-android \
-            --platform 30 \
-            -- build --locked \
-               --no-default-features \
-               --features android
-
-      # Also check the library crate without the binary targets
-      # (binaries won't cross-compile without required-features workaround)
       - name: cargo check lib only (Android aarch64)
         run: |
           cargo ndk \

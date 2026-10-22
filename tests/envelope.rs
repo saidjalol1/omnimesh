@@ -51,7 +51,7 @@ fn signed_envelope_roundtrip() {
     let mut buf = [0u8; 2048];
     let len = envelope.serialize_into(&mut buf).unwrap();
     let bytes = &buf[..len];
-    let decoded = SignedEnvelope::<128>::deserialize(&bytes).unwrap();
+    let decoded = SignedEnvelope::<128>::deserialize(bytes).unwrap();
 
     assert_eq!(decoded.header.version, envelope.header.version);
     assert_eq!(decoded.payload.as_slice(), envelope.payload.as_slice());

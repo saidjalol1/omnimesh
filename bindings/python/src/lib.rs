@@ -9,6 +9,10 @@
 //!   client.send_agent_command(target_did, "pick", b"robot-1", b"shelf-A12")
 //!   msg = client.receive(timeout_ms=5000)
 
+// PyO3 generates PyResult<()> return types that clippy incorrectly flags as
+// "useless conversion" — this is a known PyO3 + clippy interaction.
+#![allow(clippy::useless_conversion)]
+
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -42,6 +46,7 @@ pub struct Client {
 }
 
 #[pymethods]
+#[allow(clippy::useless_conversion)] // PyO3 PyResult<()> triggers false positives
 impl Client {
     /// Create a new Client.
     ///
@@ -123,6 +128,7 @@ impl Client {
     ///     angular_x, angular_y, angular_z: Angular velocity components
     ///     deadline_ns: Deadline in nanoseconds (0 = no deadline)
     #[pyo3(signature = (target_did_hex, linear_x=0.0, linear_y=0.0, linear_z=0.0, angular_x=0.0, angular_y=0.0, angular_z=0.0, deadline_ns=0))]
+    #[allow(clippy::too_many_arguments)] // Python API boundary — splitting into a struct would break the Python interface
     fn send_motion_command(
         &self,
         target_did_hex: &str,
@@ -218,7 +224,7 @@ impl Client {
             Some(PayloadKind::AgentCommand(cmd)) => {
                 dict.set_item("type", "agent_command")?;
                 dict.set_item("command_type", cmd.command_type)?;
-                dict.set_item("target_did", hex::encode(&cmd.target_did))?;
+                dict.set_item("target_did", hex::encode(cmd.target_did))?;
                 dict.set_item("payload", cmd.payload.as_slice())?;
             }
             Some(PayloadKind::Heartbeat(hb)) => {
