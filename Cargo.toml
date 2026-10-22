@@ -29,9 +29,9 @@ required-features = ["std"]
 
 [dependencies]
 tokio = { version = "1.0", features = ["full"], optional = true }
-quinn = { version = "0.11", optional = true }
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"], optional = true }
 rcgen = { version = "0.13", optional = true }
-rustls = { version = "0.23", features = ["std", "ring"], optional = true }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"], optional = true }
 rustls-pemfile = { version = "2.0", optional = true }
 rustls-pki-types = { version = "1.0", optional = true }
 flate2 = { version = "1.0", optional = true }
@@ -44,7 +44,7 @@ toml = { version = "0.8", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 clap = { version = "4.4", features = ["derive"], optional = true }
 ollama-rs = { version = "0.1.9", optional = true }
-reqwest = { version = "0.11", features = ["blocking", "json"], optional = true }
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "blocking", "json"], optional = true }
 serde_json = { version = "1.0", optional = true }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 prometheus = { version = "0.13", optional = true }
@@ -88,4 +88,26 @@ std = [
     "core_affinity",
     "thread-priority"
 ]
+# Android feature: like std but without crates that don't support Android:
+#   - sled: uses mmap (SIGBUS on Android)
+#   - core_affinity: no Android support
+#   - thread-priority: no Android support
+#   - prometheus/lazy_static/ctrlc: pull in OS signal APIs not available on Android
+android = [
+    "tokio",
+    "quinn",
+    "rcgen",
+    "rustls",
+    "rustls-pemfile",
+    "rustls-pki-types",
+    "flate2",
+    "toml",
+    "serde/std",
+    "serde_json",
+    "clap",
+    "ed25519-dalek/std",
+    "blake3/std",
+    "rand_core/std"
+]
+# Requires a locally-running Ollama server; demo/example use only, never default
 ollama = ["ollama-rs", "reqwest"]

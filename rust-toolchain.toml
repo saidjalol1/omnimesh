@@ -1,0 +1,7 @@
+[toolchain]
+channel = "stable"
+# Components for local dev (fmt + lint).
+# Cross-compile targets (aarch64-apple-darwin, aarch64-linux-android, etc.)
+# are installed by CI runners via dtolnay/rust-toolchain action — do NOT
+# list them here or rustup will try to download them on every platform.
+components = ["rustfmt", "clippy"]

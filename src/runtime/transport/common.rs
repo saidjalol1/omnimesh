@@ -3,6 +3,9 @@ use crate::envelope::{Did, EnvelopeHeader, MessageId, PayloadType, Priority, Sig
 use crate::runtime::transport::interface::DEFAULT_PAYLOAD_CAPACITY;
 use std::sync::Mutex;
 
+/// Current wire protocol version. Used in all envelope headers.
+pub const PROTOCOL_VERSION: u32 = 7;
+
 /// Certificate constants
 pub mod certificate {
     /// Default certificate common name (CN)
@@ -95,7 +98,7 @@ impl TransportUtils {
         let _ = payload.push_bytes(b"hello omnimesh");
 
         let header = EnvelopeHeader::new(
-            1,                          // version
+            PROTOCOL_VERSION,             // version
             MessageId::new([0x01; 16]), // message id
             Did::new([0x02; 32]),       // sender
             Did::new([0x03; 32]),       // recipient

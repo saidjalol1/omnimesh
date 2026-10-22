@@ -1,4 +1,4 @@
-use crate::config::OmnimeshMode;
+use crate::config::modes::OmniMeshConfig;
 use crate::envelope::Did;
 use crate::runtime::RuntimeLayer;
 use crate::runtime::RuntimeStats;
@@ -7,6 +7,7 @@ use crate::runtime::logging::{LogEntry, LogLevel, Logger};
 use crate::runtime::security::SecurityLayer;
 use crate::runtime::storage::StorageLayer;
 use crate::runtime::transport::TransportLayer;
+use crate::runtime::transport::TransportConfig;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -23,11 +24,39 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn initialize(mode: OmnimeshMode, self_did: Did) -> Result<Self, String> {
-        let transport = TransportLayer::new(&mode)?;
-        let security = SecurityLayer::new(&mode, None);
-        let storage = StorageLayer::new(&mode);
-        let delivery = DeliveryLayer::new(&mode);
+    /// Builds the runtime from the full `OmniMeshConfig` produced by the config loader.
+    ///
+    /// Bug 2 fix: builds a real `TransportConfig` from TOML-parsed addresses instead of
+    /// using the silent `TransportConfig::default()` which ignored `omni-mesh.toml`.
+    /// Bug 8 fix: uses `new_with_did` so MockTransport in Development mode is bound to
+    /// this node's actual DID, allowing the daemon to receive messages.
+    pub fn initialize(cfg: OmniMeshConfig) -> Result<Self, String> {
+        let self_did = cfg.node_id;
+
+        // Bug 2 fix: build TransportConfig from the TOML-parsed addresses
+        let transport_config = TransportConfig {
+            tcp_listen_addr: cfg.tcp_listen_addr,
+            tcp_connect_addr: cfg.tcp_connect_addr,
+            quic_listen_addr: cfg.quic_listen_addr,
+            max_read_buffer: cfg.max_read_buffer,
+            gossip_bind_addr: cfg.gossip_bind_addr,
+            gossip_interval_ms: cfg.gossip_interval_ms,
+            multicast_addr: cfg.multicast_addr,
+            connection_timeout_secs: 30,
+        };
+
+        // Bug 8 fix: bind the mock transport to the real node DID so the daemon
+        // can receive messages in Development mode (previously used zero-DID).
+        let transport = TransportLayer::with_config_and_routing_did(
+            &cfg.mode,
+            transport_config,
+            std::sync::Arc::new(crate::runtime::RoutingTable::new()),
+            self_did,
+        )?;
+
+        let security = SecurityLayer::new(&cfg.mode, None);
+        let storage = StorageLayer::new(&cfg.mode);
+        let delivery = DeliveryLayer::new(&cfg.mode);
         let shutdown = Arc::new(AtomicBool::new(false));
         let logger = Logger::new(LogLevel::Info, true);
 
@@ -48,8 +77,8 @@ impl Runtime {
         })
     }
 
-    pub fn run(mode: OmnimeshMode, self_did: Did) -> Result<(), String> {
-        let mut runtime = Self::initialize(mode, self_did)?;
+    pub fn run(cfg: OmniMeshConfig) -> Result<(), String> {
+        let mut runtime = Self::initialize(cfg)?;
         runtime.start()?;
         Ok(())
     }
@@ -186,8 +215,8 @@ impl Runtime {
     }
 }
 
-pub fn run(mode: OmnimeshMode, self_did: Did) -> Result<(), String> {
-    Runtime::run(mode, self_did)
+pub fn run(cfg: OmniMeshConfig) -> Result<(), String> {
+    Runtime::run(cfg)
 }
 
 /// Sets up a Ctrl+C handler that flips the shutdown flag.

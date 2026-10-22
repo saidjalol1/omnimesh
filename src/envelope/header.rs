@@ -39,7 +39,7 @@ impl EnvelopeHeader {
     pub fn from_bytes(buf: &[u8]) -> Result<Self, ParseError> {
         let raw = RawEnvelopeHeader::from_bytes(buf)?;
 
-        if raw.magic != RawEnvelopeHeader::MAGIC {
+        if u32::from_le(raw.magic) != RawEnvelopeHeader::MAGIC {
             return Err(ParseError::InvalidMagic(raw.magic));
         }
 
@@ -57,8 +57,8 @@ impl EnvelopeHeader {
 
     pub fn to_raw(&self) -> RawEnvelopeHeader {
         RawEnvelopeHeader {
-            magic: RawEnvelopeHeader::MAGIC,
-            version: self.version,
+            magic: RawEnvelopeHeader::MAGIC.to_le(),
+            version: self.version.to_le(),
             message_id: self.message_id.0,
             sequence: self.sequence_number.to_le(),
             sender_did: self.sender_did.0,

@@ -4,6 +4,7 @@ use crate::config::modes::layer_kinds;
 use crate::envelope::{Did, MessageId, SignedEnvelope};
 use crate::runtime::RuntimeLayer;
 use crate::runtime::storage::DtnStore;
+use crate::runtime::transport::interface::DEFAULT_PAYLOAD_CAPACITY; // Bug 4 fix
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,7 +121,9 @@ impl<const N: usize> OrderedChannel<N> {
 
 pub struct DeliveryLayer {
     kind: &'static str,
-    channel: Mutex<OrderedChannel<128>>,
+    // Bug 4 fix: was OrderedChannel<128> which silently truncated payloads > 128 bytes.
+    // Now uses DEFAULT_PAYLOAD_CAPACITY (1024) to match the rest of the pipeline.
+    channel: Mutex<OrderedChannel<DEFAULT_PAYLOAD_CAPACITY>>,
     #[allow(dead_code)]
     mode: OmnimeshMode,
 }
@@ -169,20 +172,17 @@ impl DeliveryLayer {
         &self,
         envelope: &SignedEnvelope<N>,
     ) -> Result<DeliveryStatus, String> {
-        // We only support N=128 right now due to our mutex type, but normally this would be generic
-        // To simplify, we will just assume the envelope fits or we serialize it
-        // Actually, since this is an in-memory layer in the runtime, we can cheat
-        // and just cast or assume N=128 since we defined OrderedChannel<128>.
-        // Wait, for this demo we'll use a hack to copy it to a 128 buffer:
-        let mut payload_128 = crate::buffer::PayloadStorage::<128>::new();
-        let _ = payload_128.push_bytes(envelope.payload.as_slice());
+        // Bug 4 fix: was truncating payloads to 128 bytes.
+        // Now copies into a DEFAULT_PAYLOAD_CAPACITY buffer to avoid data corruption.
+        let mut payload_buf = crate::buffer::PayloadStorage::<DEFAULT_PAYLOAD_CAPACITY>::new();
+        let _ = payload_buf.push_bytes(envelope.payload.as_slice());
 
         let header = envelope.header;
         let mut sig = [0u8; 64];
         sig.copy_from_slice(&envelope.signature);
-        let env_128 = SignedEnvelope::new(header, payload_128, sig);
+        let env_cap = SignedEnvelope::new(header, payload_buf, sig);
 
-        let status = self.channel.lock().unwrap().process(&env_128);
+        let status = self.channel.lock().unwrap().process(&env_cap);
 
         println!(
             "Delivery to {:?} from {:?} via {}: {:?}",

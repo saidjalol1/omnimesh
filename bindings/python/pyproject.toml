@@ -37,4 +37,6 @@ Documentation = "https://docs.rs/omnimesh"
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "omnimesh"
+python-source = "python"
+manifest-path = "Cargo.toml"
 exclude = ["target/**", ".venv/**", "__pycache__/**"]

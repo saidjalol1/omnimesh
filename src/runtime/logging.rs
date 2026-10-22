@@ -59,7 +59,7 @@ impl LogEntry {
     pub fn new(level: LogLevel, message: impl Into<String>) -> Self {
         let timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_micros() as u64;
 
         LogEntry {

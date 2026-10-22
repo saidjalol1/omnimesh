@@ -35,11 +35,11 @@ impl TransportLayer {
         };
 
         if !matches!(mode.transport_type(), TransportType::Mock) {
-            let gossip_addr = config.tcp_listen_addr;
-            let broadcast_addr: std::net::SocketAddr = "255.255.255.255:9999".parse().unwrap();
+            let gossip_addr = config.gossip_bind_addr;
+            let broadcast_addr = config.multicast_addr;
             routing
                 .clone()
-                .start_gossip_task(1000, gossip_addr, broadcast_addr);
+                .start_gossip_task(config.gossip_interval_ms, gossip_addr, broadcast_addr);
         }
 
         Ok(TransportLayer {
@@ -66,11 +66,11 @@ impl TransportLayer {
         };
 
         if !matches!(mode.transport_type(), TransportType::Mock) {
-            let gossip_addr = config.tcp_listen_addr;
-            let broadcast_addr: std::net::SocketAddr = "255.255.255.255:9999".parse().unwrap();
+            let gossip_addr = config.gossip_bind_addr;
+            let broadcast_addr = config.multicast_addr;
             routing
                 .clone()
-                .start_gossip_task(1000, gossip_addr, broadcast_addr);
+                .start_gossip_task(config.gossip_interval_ms, gossip_addr, broadcast_addr);
         }
 
         Ok(TransportLayer {
@@ -103,11 +103,45 @@ impl TransportLayer {
         };
 
         if !matches!(mode.transport_type(), TransportType::Mock) {
-            let gossip_addr = config.tcp_listen_addr;
-            let broadcast_addr: std::net::SocketAddr = "255.255.255.255:9999".parse().unwrap();
+            let gossip_addr = config.gossip_bind_addr;
+            let broadcast_addr = config.multicast_addr;
             routing
                 .clone()
-                .start_gossip_task(1000, gossip_addr, broadcast_addr);
+                .start_gossip_task(config.gossip_interval_ms, gossip_addr, broadcast_addr);
+        }
+
+        Ok(TransportLayer {
+            transport,
+            config,
+            routing,
+        })
+    }
+
+    /// Creates a new transport layer with custom config, routing table, and a local DID.
+    ///
+    /// Bug 8 fix: when in Development (Mock) mode the transport is bound to `local_did` so
+    /// the daemon only receives messages addressed to its actual identity, not the zero-DID.
+    pub fn with_config_and_routing_did(
+        mode: &OmnimeshMode,
+        config: TransportConfig,
+        routing: std::sync::Arc<crate::runtime::RoutingTable>,
+        local_did: Did,
+    ) -> Result<Self, String> {
+        let transport: Box<dyn Transport> = match mode.transport_type() {
+            TransportType::Mock => {
+                // Bug 8 fix: bind to the real DID so receive() returns our messages
+                Box::new(MockTransport::new(routing.clone()).with_did(local_did))
+            }
+            TransportType::Tcp => Box::new(TcpTransport::new(config.clone(), routing.clone())?),
+            TransportType::Quic => Box::new(QuicTransport::new(config.clone(), routing.clone())?),
+        };
+
+        if !matches!(mode.transport_type(), TransportType::Mock) {
+            let gossip_addr = config.gossip_bind_addr;
+            let broadcast_addr = config.multicast_addr;
+            routing
+                .clone()
+                .start_gossip_task(config.gossip_interval_ms, gossip_addr, broadcast_addr);
         }
 
         Ok(TransportLayer {

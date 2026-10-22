@@ -3,13 +3,15 @@ mode = "production"
 
 [node]
 node_id = "node-1"
+# Bootstrap peers — list IP:port of other nodes to connect to at startup:
+# known_peers = ["192.168.1.42:9000", "192.168.1.43:9000"]
 
 [node.transport]
 type = "tcp"
 tcp_listen_addr = "0.0.0.0:9000"
 tcp_connect_addr = "127.0.0.1:9001"
 quic_listen_addr = "0.0.0.0:9443"
-max_read_buffer = 1048576
+max_read_buffer = 1048576   # bytes — increase for large payloads
 
 [mode.development]
 crypto = "optional"
@@ -23,8 +25,12 @@ crypto = "required"
 wcet_enforcement = "log"
 dynamic_did_registry = false
 pool_size = 1000
+dtn_enabled = true
+# dtn_path defaults to OS temp directory; override for custom path:
+# dtn_path = "/var/lib/omnimesh/dtn"
 
 [routing]
 max_routes = 1024
-gossip_interval_ms = 1000
+gossip_interval_ms = 1000           # how often peers announce themselves (ms)
 gossip_bind_addr = "0.0.0.0:9999"
+multicast_addr = "224.0.0.1:9999"  # UDP multicast group for gossip discovery

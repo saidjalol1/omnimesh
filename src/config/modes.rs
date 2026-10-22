@@ -39,14 +39,54 @@ pub enum DidRegistryMode {
     },
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "android"))]
 #[derive(Debug, Clone)]
 pub struct OmniMeshConfig {
     pub node_id: crate::envelope::Did,
-    pub listen_addresses: alloc::vec::Vec<std::net::SocketAddr>,
+    pub listen_addresses: alloc::vec::Vec<core::net::SocketAddr>,
     pub known_peers: alloc::vec::Vec<crate::envelope::Did>,
     pub mode: OmnimeshMode,
     pub dtn_path: Option<alloc::string::String>,
+    // Transport addresses (from [node.transport] in TOML) — Bug 2 fix
+    pub tcp_listen_addr: core::net::SocketAddr,
+    pub tcp_connect_addr: core::net::SocketAddr,
+    pub quic_listen_addr: core::net::SocketAddr,
+    pub max_read_buffer: usize,
+    // Gossip UDP bind address (from [routing] in TOML) — Bug 3 fix
+    pub gossip_bind_addr: core::net::SocketAddr,
+    /// Gossip discovery interval in milliseconds — from [routing] in TOML
+    pub gossip_interval_ms: u64,
+    /// Multicast/broadcast address for gossip discovery
+    pub multicast_addr: core::net::SocketAddr,
+}
+
+#[cfg(any(feature = "std", feature = "android"))]
+impl OmniMeshConfig {
+    /// Build a minimal `OmniMeshConfig` from a mode, using built-in defaults
+    /// for all network addresses.  Useful when no TOML config file is present.
+    pub fn from_mode(mode: OmnimeshMode) -> Self {
+        use ed25519_dalek::SigningKey;
+        use rand_core::OsRng;
+        use crate::envelope::Did;
+
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let node_id = Did::new(signing_key.verifying_key().to_bytes());
+
+        Self {
+            node_id,
+            listen_addresses: alloc::vec![],
+            known_peers: alloc::vec![],
+            mode,
+            dtn_path: None, // No persistent DTN path by default; set explicitly if needed
+            tcp_listen_addr: "0.0.0.0:9000".parse().unwrap(),
+            tcp_connect_addr: "127.0.0.1:9001".parse().unwrap(),
+            quic_listen_addr: "0.0.0.0:9443".parse().unwrap(),
+            max_read_buffer: 4096,
+            gossip_bind_addr: "0.0.0.0:9999".parse().unwrap(),
+            gossip_interval_ms: 1000,
+            multicast_addr: "224.0.0.1:9999".parse().unwrap(),
+        }
+    }
 }
 
 /// Layer kind names for consistent identification across the runtime
@@ -145,12 +185,24 @@ impl OmnimeshMode {
     }
 
     pub fn production() -> Self {
+        #[cfg(feature = "std")]
+        let dtn_path = Some(
+            std::env::temp_dir()
+                .join("omnimesh-dtn")
+                .to_string_lossy()
+                .into_owned(),
+        );
+        #[cfg(all(not(feature = "std"), feature = "android"))]
+        let dtn_path = Some(alloc::string::String::from("/data/local/tmp/omnimesh-dtn"));
+        #[cfg(not(any(feature = "std", feature = "android")))]
+        let dtn_path: Option<alloc::string::String> = None;
+
         OmnimeshMode::Production(ProductionConfig {
             crypto_enabled: true,
             exactly_once_enabled: true,
             ordering_enabled: true,
             dtn_enabled: true,
-            dtn_path: Some("/tmp/omnimesh-dtn".into()),
+            dtn_path,
         })
     }
 

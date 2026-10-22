@@ -1,0 +1,67 @@
+name: Android Cross-Compile
+
+on:
+  push:
+    branches: ["main", "dev", "release/**"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  android-arm64:
+    name: Cross-compile — Android aarch64
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain + Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+          targets: aarch64-linux-android
+
+      - name: Install Android NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked --version "^3"
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: android-aarch64-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: android-aarch64-cargo-
+
+      # Bug 1+2 fix: use --no-default-features --features android to exclude
+      # sled (mmap/SIGBUS), core_affinity, thread-priority, prometheus, ctrlc
+      # which have no Android support.
+      - name: cargo build (Android aarch64, android feature set)
+        run: |
+          cargo ndk \
+            --target aarch64-linux-android \
+            --platform 30 \
+            -- build --locked \
+               --no-default-features \
+               --features android
+
+      # Also check the library crate without the binary targets
+      # (binaries won't cross-compile without required-features workaround)
+      - name: cargo check lib only (Android aarch64)
+        run: |
+          cargo ndk \
+            --target aarch64-linux-android \
+            --platform 30 \
+            -- check --locked \
+               --lib \
+               --no-default-features \
+               --features android
+
+      # Note: Tests cannot be run on Android from CI (no emulator/device).
+      # Use Firebase Test Lab or a physical device for integration tests.

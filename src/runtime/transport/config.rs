@@ -16,6 +16,12 @@ pub struct TransportConfig {
     pub max_read_buffer: usize,
     /// Connection timeout in seconds
     pub connection_timeout_secs: u64,
+    /// UDP bind address for the gossip discovery task
+    pub gossip_bind_addr: SocketAddr,
+    /// Gossip announcement interval in milliseconds
+    pub gossip_interval_ms: u64,
+    /// Multicast/broadcast address for gossip discovery
+    pub multicast_addr: SocketAddr,
 }
 
 impl Default for TransportConfig {
@@ -24,8 +30,11 @@ impl Default for TransportConfig {
             tcp_listen_addr: "127.0.0.1:9000".parse().unwrap(),
             tcp_connect_addr: "127.0.0.1:9000".parse().unwrap(),
             quic_listen_addr: "127.0.0.1:9443".parse().unwrap(),
-            max_read_buffer: 512,
+            max_read_buffer: 4096, // enough for DEFAULT_PAYLOAD_CAPACITY(1024) + header(106) + sig(64) + margin
             connection_timeout_secs: 30,
+            gossip_bind_addr: "0.0.0.0:9999".parse().unwrap(),
+            gossip_interval_ms: 1000,
+            multicast_addr: "224.0.0.1:9999".parse().unwrap(),
         }
     }
 }

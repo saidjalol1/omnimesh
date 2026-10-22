@@ -1,0 +1,230 @@
+name: Release
+
+# Triggered only when a version tag is pushed (e.g. v1.0.2)
+# DO NOT push yet — this workflow is ready but gated behind a tag.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+env:
+  CARGO_TERM_COLOR: always
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ── Build Python Wheels ────────────────────────────────────────────────────
+  python-wheels:
+    name: Python wheel — ${{ matrix.platform.name }}
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: Linux x86_64
+            runner: ubuntu-latest
+            target: x86_64
+            manylinux: auto
+
+          - name: Linux aarch64
+            runner: ubuntu-latest
+            target: aarch64
+            manylinux: auto
+
+          - name: Windows x86_64
+            runner: windows-latest
+            target: x64
+            manylinux: ""  # not used on Windows
+
+          - name: macOS x86_64
+            runner: macos-13
+            target: x86_64
+            manylinux: ""
+
+          - name: macOS Apple Silicon
+            runner: macos-14
+            target: aarch64
+            manylinux: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # Linux: use maturin-action with manylinux for broad glibc compat
+      - name: Build wheels (Linux via manylinux)
+        if: runner.os == 'Linux'
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          manylinux: ${{ matrix.platform.manylinux }}
+          working-directory: bindings/python
+          # abi3-py38 means one wheel covers Python 3.8–3.13
+          args: --release --locked --out dist --features pyo3/extension-module
+          sccache: true
+
+      # Windows / macOS: run maturin directly
+      - name: Build wheels (Windows/macOS)
+        if: runner.os != 'Linux'
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          working-directory: bindings/python
+          args: --release --locked --out dist --features pyo3/extension-module
+          sccache: true
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.platform.name }}
+          path: bindings/python/dist/*.whl
+
+  # ── Build Rust Binaries ────────────────────────────────────────────────────
+  rust-binaries:
+    name: Rust binary — ${{ matrix.target.name }}
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - name: linux-x86_64
+            runner: ubuntu-latest
+            rust_target: x86_64-unknown-linux-gnu
+            artifact_suffix: ""
+
+          - name: windows-x86_64
+            runner: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+            artifact_suffix: ".exe"
+
+          - name: macos-x86_64
+            runner: macos-13
+            rust_target: x86_64-apple-darwin
+            artifact_suffix: ""
+
+          - name: macos-arm64
+            runner: macos-14
+            rust_target: aarch64-apple-darwin
+            artifact_suffix: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+          targets: ${{ matrix.target.rust_target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target.rust_target }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: |
+          cargo build --locked --release --target ${{ matrix.target.rust_target }} --features std
+
+      - name: Package binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cp target/${{ matrix.target.rust_target }}/release/omnimesh \
+             omnimesh-${{ matrix.target.name }}
+
+      - name: Package binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cp target/${{ matrix.target.rust_target }}/release/omnimesh.exe `
+             omnimesh-${{ matrix.target.name }}.exe
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target.name }}
+          path: omnimesh-${{ matrix.target.name }}${{ matrix.target.artifact_suffix }}
+
+  # ── Create GitHub Release ──────────────────────────────────────────────────
+  github-release:
+    name: Create GitHub Release
+    needs: [python-wheels, rust-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/wheels-*/*.whl
+            artifacts/binary-*/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+
+  # ── Publish to PyPI ────────────────────────────────────────────────────────
+  pypi-publish:
+    name: Publish to PyPI
+    needs: [python-wheels]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+  # ── Publish to crates.io ───────────────────────────────────────────────────
+  # Requires: add CARGO_REGISTRY_TOKEN to GitHub repo Secrets
+  #   → crates.io/settings/tokens  →  copy token
+  #   → GitHub repo → Settings → Secrets and variables → Actions → New secret
+  #     Name:  CARGO_REGISTRY_TOKEN
+  #     Value: <your crates.io API token>
+  crates-publish:
+    name: Publish to crates.io
+    needs: [github-release, rust-binaries]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: crates-publish-${{ hashFiles('**/Cargo.lock') }}
+
+      # --no-verify skips running tests again (already passed in ci.yml)
+      # --allow-dirty is NOT used — workspace must be clean on a tag
+      - name: Publish omnimesh to crates.io
+        run: cargo publish --locked --no-verify
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

@@ -42,6 +42,7 @@ use crate::payload::{EnvelopePayload, decode_payload, encode_payload};
 use crate::runtime::RoutingTable;
 use crate::runtime::security::SecurityLayer;
 use crate::runtime::transport::TransportLayer;
+use crate::runtime::transport::common::PROTOCOL_VERSION;
 use crate::runtime::transport::interface::DEFAULT_PAYLOAD_CAPACITY;
 
 /// A message received by the SDK — fully verified and decoded.
@@ -188,11 +189,24 @@ impl OmnimeshClient {
         // IMPORTANT: share the routing table so register_peer() works
         let transport = if let Some(port) = config.listen_port {
             use crate::runtime::transport::TransportConfig;
-            let listen_addr = format!("127.0.0.1:{}", port).parse().unwrap();
+            let listen_addr = format!("127.0.0.1:{}", port)
+                .parse()
+                .map_err(|e| format!("Invalid listen address: {}", e))?;
+            // Bug 9 fix: port + 443 could overflow u16 and panic via unwrap().
+            // Use checked_add and return a proper error instead.
+            let quic_port = port.checked_add(443).ok_or_else(|| {
+                format!(
+                    "listen_port {} is too high: port + 443 overflows u16 (max 65535)",
+                    port
+                )
+            })?;
+            let quic_addr = format!("127.0.0.1:{}", quic_port)
+                .parse()
+                .map_err(|e| format!("Invalid QUIC address: {}", e))?;
             let transport_config = TransportConfig::new(
                 listen_addr,
                 listen_addr, // connect_addr same as listen for single-machine
-                format!("127.0.0.1:{}", port + 443).parse().unwrap(),
+                quic_addr,
             );
             Arc::new(TransportLayer::with_config_and_routing(
                 &config.mode,
@@ -282,7 +296,7 @@ impl OmnimeshClient {
         id_bytes[8..].copy_from_slice(&now_us.to_le_bytes());
 
         let header = EnvelopeHeader {
-            version: 7,
+            version: PROTOCOL_VERSION,
             message_id: MessageId(id_bytes),
             sender_did: self.did,
             recipient_did: recipient,

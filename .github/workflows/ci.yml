@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "dev", "release/**"]
+  pull_request:
+    branches: ["main", "dev"]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ── Format & Lint ──────────────────────────────────────────────────────────
+  lint:
+    name: Lint (fmt + clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-lint-
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (std features)
+        run: cargo clippy --locked --workspace --all-targets --features std -- -D warnings
+
+      # Bug 6 fix: verify ollama feature compiles (no live server needed, just check)
+      - name: Clippy (ollama feature compile-check)
+        run: cargo clippy --locked --features ollama -- -D warnings
+
+  # ── Test Matrix: Linux / Windows / macOS ──────────────────────────────────
+  test:
+    name: Test — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-test-
+
+      # Bug 5 fix: --locked ensures Cargo.lock is respected — no silent dependency drift
+      - name: cargo check (locked)
+        run: cargo check --locked --workspace --all-targets
+
+      - name: cargo test (locked)
+        run: cargo test --locked --workspace
+        env:
+          # Give storage-heavy crash_recovery tests more time on Windows
+          RUST_TEST_THREADS: 4
+
+  # ── macOS Universal Binary Check ──────────────────────────────────────────
+  macos-arm:
+    name: Check — macOS Apple Silicon (aarch64)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain + aarch64 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-aarch64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: cargo check for Apple Silicon
+        run: cargo check --locked --target aarch64-apple-darwin --features std

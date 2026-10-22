@@ -51,7 +51,7 @@ impl DtnStore {
         let key = format!("seen:{}", hex::encode(message_id.0));
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         self.db
             .insert(key.as_bytes(), &timestamp.to_le_bytes())
@@ -63,7 +63,7 @@ impl DtnStore {
     pub fn cleanup_old_seen_messages(&self, retention_seconds: u64) -> Result<usize, String> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         let mut removed = 0;
@@ -109,6 +109,11 @@ impl DtnStore {
 
         for item in self.db.iter() {
             if let Ok((key, val)) = item {
+                // Bug 10 fix: skip deduplication marker keys (prefixed with "seen:")
+                // so we don't attempt to parse them as envelope binary data.
+                if key.starts_with(b"seen:") {
+                    continue;
+                }
                 if let Ok(env) = SignedEnvelope::<N>::deserialize(&val) {
                     if &env.header.recipient_did == recipient {
                         envelopes.push(env);
@@ -146,7 +151,16 @@ impl StorageLayer {
                 if cfg.dtn_enabled
                     && let Some(path) = &cfg.dtn_path
                 {
-                    dtn = DtnStore::new(path).ok();
+                    dtn = match DtnStore::new(path) {
+                        Ok(store) => Some(store),
+                        Err(e) => {
+                            eprintln!(
+                                "WARNING: Failed to open DTN store at '{}': {}. Falling back to in-memory storage.",
+                                path, e
+                            );
+                            None
+                        }
+                    };
                 }
                 layer_kinds::PERSISTENT_STORAGE
             }
@@ -167,7 +181,7 @@ impl StorageLayer {
 
         if let Some(dtn) = &self.dtn {
             dtn.store_envelope(&envelope)?;
-            println!("Envelope stored persistently in RocksDB DTN.");
+            println!("Envelope stored persistently in sled DTN store."); // Bug 5 fix: was "RocksDB"
         }
 
         self.stored.push(envelope);

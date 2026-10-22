@@ -23,8 +23,9 @@ fn main() -> Result<(), String> {
     println!("Node ID: {:?}", runtime_config.node_id);
     println!("Operating Mode: {:?}", runtime_config.mode);
 
-    // Pass config to runtime (will be fully async later)
-    if let Err(e) = omnimesh::runtime::run(runtime_config.mode, runtime_config.node_id) {
+    // Bug 2 fix: pass the full config (including TOML-parsed transport addresses)
+    // instead of (mode, node_id) which silently discarded all network settings.
+    if let Err(e) = omnimesh::runtime::run(runtime_config) {
         eprintln!("Daemon crashed: {}", e);
         std::process::exit(1);
     }

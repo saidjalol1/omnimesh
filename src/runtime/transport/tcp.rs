@@ -127,6 +127,7 @@ impl TcpTransport {
         let pool_clone = pool.clone();
         let stats_clone = stats.clone();
         let runtime_clone = runtime.clone();
+        let send_max_buf = config.max_read_buffer;
         runtime_clone.spawn(async move {
             while let Some(req) = send_rx.recv().await {
                 let mut pool_guard = pool_clone.lock().await;
@@ -140,7 +141,7 @@ impl TcpTransport {
                     match pool_guard.get_or_create(req.addr).await {
                         Ok(_) => {
                             if let Some(stream) = pool_guard.get_mut(req.addr) {
-                                let mut buf = [0u8; 2048];
+                                let mut buf = vec![0u8; send_max_buf];
                                 if let Ok(len) = req.envelope.serialize_into(&mut buf) {
                                     // Write 4-byte length prefix + payload
                                     let len_bytes = (len as u32).to_be_bytes();
@@ -193,6 +194,7 @@ impl TcpTransport {
         let listen_addr = config.tcp_listen_addr;
         let stats_clone = stats.clone();
         let runtime_clone = runtime.clone();
+        let recv_max_buf = config.max_read_buffer;
 
         runtime_clone.spawn(async move {
             match TcpListener::bind(listen_addr).await {
@@ -207,7 +209,7 @@ impl TcpTransport {
 
                                 tokio::spawn(async move {
                                     let mut len_buf = [0u8; 4];
-                                    let mut msg_buf = [0u8; 2048];
+                                    let mut msg_buf = vec![0u8; recv_max_buf];
 
                                     'connection: loop {
                                         // Read 4-byte length prefix
@@ -217,6 +219,10 @@ impl TcpTransport {
                                         }
                                         let msg_len = u32::from_be_bytes(len_buf) as usize;
                                         if msg_len == 0 || msg_len > msg_buf.len() {
+                                            eprintln!(
+                                                "TCP: invalid frame length {} (max {}), closing connection",
+                                                msg_len, msg_buf.len()
+                                            );
                                             break 'connection;
                                         }
                                         // Read exact message bytes

@@ -44,12 +44,16 @@ impl CertificatePair {
     /// Creates an X.509 self-signed certificate suitable for QUIC.
     /// This is appropriate for development and testing; production deployments
     /// should use proper certificate infrastructure (CA-signed certificates).
-    pub fn generate_self_signed(_config: CertificateConfig) -> Result<Self, String> {
+    pub fn generate_self_signed(config: CertificateConfig) -> Result<Self, String> {
         // Build subject alternative names (SANs) from constants
-        let subject_alt_names = certificate::ALT_NAMES
+        let mut subject_alt_names: Vec<String> = certificate::ALT_NAMES
             .iter()
             .map(|s| s.to_string())
-            .collect::<Vec<_>>();
+            .collect();
+        // Include the configured CN if not already present
+        if !subject_alt_names.contains(&config.cn) {
+            subject_alt_names.push(config.cn);
+        }
 
         // Generate self-signed certificate
         let cert = rcgen::generate_simple_self_signed(subject_alt_names)

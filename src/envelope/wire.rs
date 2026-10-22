@@ -30,13 +30,23 @@ impl RawEnvelopeHeader {
         Self::SIZE
     }
 
-    pub fn from_bytes(buf: &[u8]) -> Result<&Self, ParseError> {
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, ParseError> {
         if buf.len() < Self::SIZE {
             return Err(ParseError::Truncated);
         }
 
-        let ptr = buf.as_ptr() as *const Self;
-        unsafe { Ok(&*ptr) }
+        // SAFETY: We use copy_nonoverlapping into a fresh MaybeUninit to avoid
+        // unaligned reads from the #[repr(C, packed)] struct. Casting packed
+        // struct pointers directly causes SIGBUS on ARMv7 (32-bit Android).
+        let mut raw = core::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                buf.as_ptr(),
+                raw.as_mut_ptr() as *mut u8,
+                Self::SIZE,
+            );
+            Ok(raw.assume_init())
+        }
     }
 }
 

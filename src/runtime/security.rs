@@ -39,10 +39,18 @@ pub struct SecurityLayer {
 
 impl SecurityLayer {
     pub fn new(mode: &OmnimeshMode, signer: Option<alloc::boxed::Box<dyn HardwareSigner>>) -> Self {
-        let (kind, crypto_required) = match mode {
-            OmnimeshMode::Development(_) => (layer_kinds::OPTIONAL_SECURITY, false),
-            OmnimeshMode::Lightweight(_) => (layer_kinds::MINIMAL_SECURITY, false),
-            OmnimeshMode::Production(_) => (layer_kinds::STANDARD_SECURITY, true),
+        let kind = match mode {
+            OmnimeshMode::Development(_) => layer_kinds::OPTIONAL_SECURITY,
+            OmnimeshMode::Lightweight(_) => layer_kinds::MINIMAL_SECURITY,
+            OmnimeshMode::Production(_) => layer_kinds::STANDARD_SECURITY,
+        };
+
+        let crypto_required = match mode {
+            OmnimeshMode::Production(cfg) => cfg.crypto_enabled,
+            OmnimeshMode::Development(cfg) => {
+                cfg.crypto_signatures == crate::config::CryptoMode::Required
+            }
+            OmnimeshMode::Lightweight(cfg) => cfg.crypto_enabled,
         };
 
         SecurityLayer {
@@ -61,7 +69,9 @@ impl SecurityLayer {
                     self.kind
                 ));
             } else {
-                println!("Accepted unsigned envelope in {}", self.kind);
+                // Bug 6 fix: was println! on every message — now only in debug builds
+                #[cfg(debug_assertions)]
+                eprintln!("[DEBUG] Accepted unsigned envelope in {}", self.kind);
                 return Ok(());
             }
         }
@@ -72,7 +82,9 @@ impl SecurityLayer {
 
         match envelope.verify_signature(&public_key) {
             Ok(_) => {
-                println!("Verified envelope signature in {}", self.kind);
+                // Bug 6 fix: was println! on every message — now only in debug builds
+                #[cfg(debug_assertions)]
+                eprintln!("[DEBUG] Verified envelope signature in {}", self.kind);
                 Ok(())
             }
             Err(e) => Err(format!("Cryptographic verification failed: {}", e)),

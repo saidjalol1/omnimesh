@@ -208,6 +208,8 @@ pub struct RoutingConfig {
     /// Gossip UDP bind address
     #[serde(default = "default_gossip_bind")]
     pub gossip_bind_addr: String,
+    /// Multicast/broadcast address for gossip discovery (optional, defaults to 224.0.0.1:9999)
+    pub multicast_addr: Option<String>,
 }
 
 impl Default for RoutingConfig {
@@ -219,6 +221,7 @@ impl Default for RoutingConfig {
             dtn_max_messages: 10000,
             dtn_max_bytes_mb: 1024,
             gossip_bind_addr: "0.0.0.0:9999".into(),
+            multicast_addr: None,
         }
     }
 }
@@ -391,12 +394,40 @@ impl ConfigFile {
             _ => None,
         };
 
+        // Parse transport config from [node.transport]
+        let transport_cfg = self.node.transport.to_transport_config()?;
+
+        // Parse gossip bind address from [routing] — Bug 3 fix
+        let gossip_bind_addr = self
+            .routing
+            .gossip_bind_addr
+            .parse::<std::net::SocketAddr>()
+            .map_err(|e| format!("Invalid gossip_bind_addr '{}': {}", self.routing.gossip_bind_addr, e))?;
+
+        // Parse multicast address from [routing] (fall back to default if not set)
+        let multicast_addr = self
+            .routing
+            .multicast_addr
+            .as_deref()
+            .unwrap_or("224.0.0.1:9999")
+            .parse::<std::net::SocketAddr>()
+            .map_err(|e| format!("Invalid multicast_addr: {}", e))?;
+
+        let gossip_interval_ms = self.routing.gossip_interval_ms;
+
         Ok(crate::config::modes::OmniMeshConfig {
             node_id,
             listen_addresses,
             known_peers,
             mode,
             dtn_path,
+            tcp_listen_addr: transport_cfg.tcp_listen_addr,
+            tcp_connect_addr: transport_cfg.tcp_connect_addr,
+            quic_listen_addr: transport_cfg.quic_listen_addr,
+            max_read_buffer: transport_cfg.max_read_buffer,
+            gossip_bind_addr,
+            gossip_interval_ms,
+            multicast_addr,
         })
     }
 }
