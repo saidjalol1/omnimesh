@@ -17,11 +17,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain + Android target
+      - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.85"
-          targets: aarch64-linux-android
+
+      - name: Add Android cross-compile target
+        run: rustup target add aarch64-linux-android
 
       # Use the NDK pre-installed on the GitHub runner instead of
       # android-actions/setup-android@v3 (uses deprecated Node.js 20).
