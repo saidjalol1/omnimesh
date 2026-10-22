@@ -1,6 +1,12 @@
 *.docx
+
+# Ignore generated/temp markdown but NOT README files
+# README.md files are required by maturin (Python wheels), crates.io, and GitHub
 *.md
+!README.md
+!**/README.md
+!CHANGELOG.md
+!CONTRIBUTING.md
 
 # Added by cargo
-
 /target
