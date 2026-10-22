@@ -25,10 +25,8 @@ jobs:
             target: x86_64
             manylinux: auto
 
-          - name: Linux aarch64
-            runner: ubuntu-latest
-            target: aarch64
-            manylinux: auto
+          # Linux aarch64 removed: ring crypto crate cannot cross-compile ARM asm in manylinux
+          # macOS Apple Silicon wheel covers ARM64 users on Mac
 
           - name: Windows x86_64
             runner: windows-latest
