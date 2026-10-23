@@ -34,7 +34,7 @@ jobs:
             manylinux: ""  # not used on Windows
 
           - name: macOS x86_64
-            runner: macos-13
+            runner: macos-latest
             target: x86_64
             manylinux: ""
 
@@ -98,7 +98,7 @@ jobs:
             artifact_suffix: ".exe"
 
           - name: macos-x86_64
-            runner: macos-13
+            runner: macos-latest
             rust_target: x86_64-apple-darwin
             artifact_suffix: ""
 
