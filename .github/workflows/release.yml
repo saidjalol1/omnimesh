@@ -193,7 +193,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          password: ${{ secrets.OMNIMESHV102 }}
           user: __token__
           attestations: false
 
@@ -229,4 +229,4 @@ jobs:
       - name: Publish omnimesh to crates.io
         run: cargo publish --locked --no-verify
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.OMNIMESHV102CRATESIO }}
