@@ -194,6 +194,8 @@ jobs:
         with:
           packages-dir: dist/
           password: ${{ secrets.PYPI_API_TOKEN }}
+          user: __token__
+          attestations: false
 
   # ── Publish to crates.io ───────────────────────────────────────────────────
   # Requires: add CARGO_REGISTRY_TOKEN to GitHub repo Secrets

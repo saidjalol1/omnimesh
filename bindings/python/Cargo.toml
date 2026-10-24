@@ -1,6 +1,6 @@
 [package]
 name = "omnimesh-py"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 description = "Python bindings for OMNI-MESH mesh networking middleware"
 license = "MIT"
