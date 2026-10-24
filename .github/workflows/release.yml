@@ -34,7 +34,7 @@ jobs:
             manylinux: ""  # not used on Windows
 
           - name: macOS x86_64
-            runner: macos-13
+            runner: macos-14
             target: x86_64
             manylinux: ""
 
@@ -98,7 +98,7 @@ jobs:
             artifact_suffix: ".exe"
 
           - name: macos-x86_64
-            runner: macos-13
+            runner: macos-14
             rust_target: x86_64-apple-darwin
             artifact_suffix: ""
 
@@ -114,7 +114,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.85"
-          targets: ${{ matrix.target.rust_target }}
+
+      - name: Add compile target
+        run: rustup target add ${{ matrix.target.rust_target }}
 
       - name: Cache cargo
         uses: actions/cache@v4
